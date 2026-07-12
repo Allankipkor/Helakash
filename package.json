@@ -1,0 +1,21 @@
+{
+  "name": "helakash",
+  "version": "1.0.0",
+  "description": "HelaKash Play & Win gaming dashboard with Pay Hero M-Pesa STK push integration.",
+  "main": "index.html",
+  "scripts": {
+    "dev-server": "echo 'Run vercel dev directly'"
+  },
+  "keywords": [
+    "mpesa",
+    "payhero",
+    "betting",
+    "gaming",
+    "casino"
+  ],
+  "author": "Antigravity",
+  "license": "ISC",
+  "devDependencies": {
+    "vercel": "^37.0.0"
+  }
+}

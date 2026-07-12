@@ -1,0 +1,534 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>HelaKash Aviator | Play & Win</title>
+  <meta name="description" content="Play Aviator Crash on HelaKash. Safe M-Pesa deposits and instant cashouts powered by Pay Hero.">
+  <!-- Google Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&family=Outfit:wght@400;600;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+
+  <!-- Floating Toast Container -->
+  <div class="toast-container" id="toastContainer"></div>
+
+  <!-- Main App Shell -->
+  <div class="app-shell">
+
+    <!-- Top Navigation Header -->
+    <header class="top-header">
+      <div class="header-left">
+        <a href="#" class="brand-logo">HelaKash</a>
+      </div>
+      <div class="header-right">
+        <div class="header-actions" id="headerActions" style="display: flex; align-items: center; gap: 8px;">
+          <!-- Outlined Sign-Up -->
+          <button class="btn-hdr-signup" onclick="openAuthModal('signup')">SIGN-UP</button>
+          <!-- Filled Sign-In -->
+          <button class="btn-hdr-signin" onclick="openAuthModal('signin')">SIGN-IN</button>
+        </div>
+        <!-- Hamburger Menu -->
+        <button class="btn-hdr-menu" aria-label="Menu" onclick="toggleSidebarMenu()">
+          <svg viewBox="0 0 24 24" width="24" height="24" stroke="currentColor" stroke-width="2.5" fill="none">
+            <line x1="3" y1="12" x2="21" y2="12"></line>
+            <line x1="3" y1="6" x2="21" y2="6"></line>
+            <line x1="3" y1="18" x2="21" y2="18"></line>
+          </svg>
+        </button>
+      </div>
+    </header>
+
+    <!-- Project Side Navigation Drawer (Toggled by hamburger) -->
+    <aside class="sidebar-drawer hidden" id="sidebarDrawer">
+      <div class="drawer-header">
+        <h3>HelaKash Settings</h3>
+        <button class="btn-drawer-close" onclick="toggleSidebarMenu()">&times;</button>
+      </div>
+      <div class="drawer-body">
+        <div class="drawer-wallet-info">
+          <span>Active Balance:</span>
+          <strong id="drawerBalanceVal">KES 500.00</strong>
+        </div>
+        <div class="drawer-menu-links">
+          <a href="#games" onclick="toggleSidebarMenu()">Play Aviator</a>
+          <a href="#wallet" onclick="toggleSidebarMenu()">Wallet Controls</a>
+          <a href="#wallet" onclick="toggleSidebarMenu()">Transaction Logs</a>
+        </div>
+        <div class="drawer-footer-text">
+          <p>Secure Pay Hero API Mode active.</p>
+        </div>
+      </div>
+    </aside>
+
+    <!-- Multiplier History Header Bar -->
+    <div class="history-strip">
+      <div class="history-scroll" id="aviatorHistory">
+        <!-- Loaded dynamically by JS -->
+      </div>
+      <button class="btn-history-more" aria-label="Show more history">
+        <svg viewBox="0 0 24 24" width="16" height="16" stroke="currentColor" stroke-width="3" fill="none">
+          <circle cx="12" cy="12" r="1" />
+          <circle cx="12" cy="5" r="1" />
+          <circle cx="12" cy="19" r="1" />
+        </svg>
+      </button>
+    </div>
+
+    <!-- MAIN GAMEPLAY AREA -->
+    <main class="main-content" id="gameView">
+      
+      <div id="aviatorGameView">
+        <!-- Canvas Block Container -->
+      <div class="canvas-card">
+        <div class="canvas-header-bar">
+          <span>FUN MODE</span>
+        </div>
+        <div class="canvas-wrapper">
+          <canvas id="aviatorCanvas"></canvas>
+          <div class="canvas-hud" id="aviatorHud">
+            <span id="aviatorStatusText">Waiting for next round</span>
+            <h2 id="aviatorMultiplierVal">1.00x</h2>
+          </div>
+          <div class="round-id-stamp" id="aviatorRoundId">ROUND ID: #454879</div>
+        </div>
+      </div>
+
+      <!-- Stake Selector Tabs -->
+      <div class="stake-selector-tabs">
+        <button class="tab-btn active" id="stakeSelectorTab" onclick="switchBetConsoleTab('selector')">STAKE SELECTOR</button>
+        <button class="tab-btn" id="aiTab" onclick="switchBetConsoleTab('ai')">AI CHAT SUPPORT</button>
+      </div>
+
+      <!-- Dual Bet Consoles Container -->
+      <div class="bet-consoles-grid" id="stakeSelectorPanel">
+        
+        <!-- BET CONSOLE A -->
+        <div class="bet-console-box">
+          <div class="console-row-main">
+            <!-- Left: Stake inputs -->
+            <div class="bet-inputs-left">
+              <div class="bet-input-spin">
+                <button class="btn-spin-adj" onclick="adjustConsoleBet('A', -10)">-</button>
+                <input type="number" id="betAmountA" class="bet-val-input" value="10" min="10">
+                <button class="btn-spin-adj" onclick="adjustConsoleBet('A', 10)">+</button>
+              </div>
+              <div class="bet-quick-row">
+                <button class="btn-quick-stake" onclick="setConsoleBet('A', 50)">50</button>
+                <button class="btn-quick-stake" onclick="setConsoleBet('A', 100)">100</button>
+                <button class="btn-quick-stake" onclick="setConsoleBet('A', 200)">200</button>
+                <button class="btn-quick-stake" onclick="setConsoleBet('A', 500)">500</button>
+              </div>
+            </div>
+            <!-- Right: Action Bet Button -->
+            <button class="btn-console-action" id="btnActionA" onclick="handleConsoleAction('A')">
+              <span class="action-btn-lbl">BET</span>
+              <span class="action-btn-amount" id="btnAmountTextA">10.00 KES</span>
+            </button>
+          </div>
+          <!-- Auto Cashout Row -->
+          <div class="console-row-auto">
+            <div class="auto-toggle-wrap">
+              <span>AUTO CASH OUT</span>
+              <label class="switch-toggle">
+                <input type="checkbox" id="autoToggleA" onchange="toggleAutoCashout('A')">
+                <span class="switch-slider"></span>
+              </label>
+            </div>
+            <input type="number" id="autoValA" class="auto-multiplier-val" value="1.20" step="0.1" min="1.1" disabled>
+          </div>
+        </div>
+
+        <!-- BET CONSOLE B -->
+        <div class="bet-console-box">
+          <div class="console-row-main">
+            <!-- Left: Stake inputs -->
+            <div class="bet-inputs-left">
+              <div class="bet-input-spin">
+                <button class="btn-spin-adj" onclick="adjustConsoleBet('B', -10)">-</button>
+                <input type="number" id="betAmountB" class="bet-val-input" value="10" min="10">
+                <button class="btn-spin-adj" onclick="adjustConsoleBet('B', 10)">+</button>
+              </div>
+              <div class="bet-quick-row">
+                <button class="btn-quick-stake" onclick="setConsoleBet('B', 50)">50</button>
+                <button class="btn-quick-stake" onclick="setConsoleBet('B', 100)">100</button>
+                <button class="btn-quick-stake" onclick="setConsoleBet('B', 200)">200</button>
+                <button class="btn-quick-stake" onclick="setConsoleBet('B', 500)">500</button>
+              </div>
+            </div>
+            <!-- Right: Action Bet Button -->
+            <button class="btn-console-action" id="btnActionB" onclick="handleConsoleAction('B')">
+              <span class="action-btn-lbl">BET</span>
+              <span class="action-btn-amount" id="btnAmountTextB">10.00 KES</span>
+            </button>
+          </div>
+          <!-- Auto Cashout Row -->
+          <div class="console-row-auto">
+            <div class="auto-toggle-wrap">
+              <span>AUTO CASH OUT</span>
+              <label class="switch-toggle">
+                <input type="checkbox" id="autoToggleB" onchange="toggleAutoCashout('B')">
+                <span class="switch-slider"></span>
+              </label>
+            </div>
+            <input type="number" id="autoValB" class="auto-multiplier-val" value="1.20" step="0.1" min="1.1" disabled>
+          </div>
+        </div>
+
+      </div>
+
+      <!-- IN-GAME AI CHAT SUPPORT SIDEBAR (Fitted into the AI tab) -->
+      <div class="glass-card hidden" id="aiSupportPanel" style="margin-top: 16px; display: flex; flex-direction: column; gap: 16px; max-width: 100%;">
+        <div class="chat-area" id="chatArea">
+          <div class="chat-header">
+            <div class="chat-agent-info">
+              <div class="chat-avatar-wrapper">
+                <div class="chat-avatar">AI</div>
+                <span class="chat-online-dot"></span>
+              </div>
+              <div class="chat-status-details">
+                <span class="chat-agent-name">Kash Assistant</span>
+                <span class="chat-status">Active Now</span>
+              </div>
+            </div>
+          </div>
+          <div class="chat-messages" id="chatMessages" style="max-height: 250px; overflow-y: auto;">
+            <!-- Messages rendered by JS -->
+          </div>
+          <div class="chat-typing hidden" id="chatTyping">
+            <div class="typing-bubble">
+              <div class="typing-dot"></div>
+              <div class="typing-dot"></div>
+              <div class="typing-dot"></div>
+            </div>
+            <span class="typing-text">Agent is typing...</span>
+          </div>
+          <form class="chat-input-area" id="chatInputForm" onsubmit="sendUserMessage(event)">
+            <input type="text" id="chatInput" placeholder="Type a reply to Agent..." required autocomplete="off">
+            <button type="submit" class="chat-send-btn">
+              <svg viewBox="0 0 24 24" width="20" height="20" stroke="currentColor" stroke-width="2.5" fill="none">
+                <line x1="22" y1="2" x2="11" y2="13"></line>
+                <polygon points="22 2 15 22 11 13 2 9 22 2"></polygon>
+              </svg>
+            </button>
+          </form>
+        </div>
+      </div>
+      </div> <!-- /aviatorGameView -->
+
+      <!-- MINES GRID GAME (Standard Tab Mode) -->
+      <div class="glass-card hidden" id="minesGameView" style="margin-top: 24px;">
+        <div class="wallet-card-header" style="border-bottom: 1px solid rgba(255,255,255,0.05); padding-bottom: 16px; margin-bottom: 24px;">
+          <h3>Mines Matrix</h3>
+          <p>Configure stakes, choose mines count, sweep squares</p>
+        </div>
+        <div class="mines-panel-layout">
+          <!-- Left settings -->
+          <div class="bet-console" style="background: transparent; border: none; padding: 0;">
+            <div class="form-group">
+              <span class="input-label">Mines Stake (KES)</span>
+              <div class="bet-input-wrapper">
+                <input type="number" id="minesBetInput" class="bet-amount-input" value="100" min="10" max="10000" aria-label="Mines stake">
+              </div>
+            </div>
+            <div class="form-group">
+              <label for="mineCountSelect" class="input-label">Mines Count</label>
+              <select id="mineCountSelect" class="custom-select" aria-label="Mines quantity select">
+                <!-- Populated dynamically -->
+              </select>
+            </div>
+            <button class="btn-primary" id="btnMinesStart" onclick="startMinesGame()">Start Mines Game</button>
+            <button class="btn-primary btn-cashout hidden" id="btnMinesCashout" onclick="cashoutMinesGame()">Cash Out</button>
+          </div>
+          <!-- Right Grid visual -->
+          <div class="mines-visual-board" style="display: flex; flex-direction: column; align-items: center; gap: 16px;">
+            <div class="mines-multiplier-indicator" id="minesMultIndicator">Multiplier: <span>x1.00</span></div>
+            <div class="mines-grid" id="minesGrid"></div>
+            <span class="stk-desc" id="minesInfoText">1st Gem Payout: x1.01</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- WALLET & HISTORY TAB VIEW -->
+      <div class="glass-card hidden" id="walletSection" style="margin-top: 24px;">
+        <div class="wallet-grid">
+          
+          <!-- Controls -->
+          <div class="wallet-card">
+            <div class="wallet-card-header">
+              <h3>HelaWallet Control</h3>
+              <p>Fund or cash out your gaming account</p>
+            </div>
+            <div class="wallet-balance-big">
+              <span>Account Wallet Balance</span>
+              <h2 id="walletBalanceVal">KES 500.00</h2>
+            </div>
+            <button class="btn-submit-wallet btn-submit-deposit" onclick="openDepositModal()" style="margin-bottom: 24px; font-size: 15px; font-weight: 700; padding: 16px;">
+              ⚡ DEPOSIT VIA M-PESA STK PUSH
+            </button>
+            
+            <form id="withdrawForm" onsubmit="handleWithdrawSubmit(event)">
+              <h4 class="console-title" style="margin-bottom: 16px; font-size: 13px;">Request Withdrawal</h4>
+              <div class="form-group">
+                <label for="withdrawAmount" class="input-label">Amount (KES)</label>
+                <div class="input-with-prefix">
+                  <span class="input-prefix">KES</span>
+                  <input type="number" id="withdrawAmount" placeholder="e.g. 500" min="50" required>
+                </div>
+                <small class="stk-desc" style="display: block; margin-top: 4px;">Min limit is KES 50. Processing is automated.</small>
+              </div>
+              <div class="form-group">
+                <label for="withdrawPhone" class="input-label">M-Pesa Number</label>
+                <div class="input-with-prefix">
+                  <span class="input-prefix">+254</span>
+                  <input type="tel" id="withdrawPhone" placeholder="7XXXXXXXX" required>
+                </div>
+              </div>
+              <button type="submit" class="btn-submit-wallet btn-submit-withdraw">Submit Payout Request</button>
+            </form>
+          </div>
+
+          <!-- History -->
+          <div class="wallet-card">
+            <div class="wallet-card-header">
+              <h3>Transactions Ledger</h3>
+              <p>Audit log of deposit, withdrawal, and bet activities</p>
+            </div>
+            <div class="transaction-list" id="txList">
+              <!-- Handled dynamically -->
+            </div>
+          </div>
+
+        </div>
+      </div>
+
+    </main>
+
+    <!-- Footer Area -->
+    <footer class="bottom-footer">
+      <div class="container text-center">
+        <p class="brand-subtext" style="margin: 0 auto 10px auto;">Automated M-Pesa push API systems hosted for local multiplayer crash gaming.</p>
+        <p>&copy; 2026 HelaKash Gaming Ltd. Strictly 18+ to play.</p>
+        <p class="security-text" style="margin-top: 10px;">🔒 Powered by Pay Hero M-Pesa API Gateway</p>
+      </div>
+    </footer>
+
+    <!-- STICKY BOTTOM NAVIGATION BAR (Matches image bottom strip) -->
+    <nav class="bottom-tab-bar">
+      <!-- Wallet Tab link -->
+      <button class="tab-bar-item" onclick="switchMainTab('wallet')" id="navTabWallet">
+        <div class="tab-bar-icon color-green">
+          <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2.5">
+            <rect x="2" y="4" width="20" height="16" rx="2" ry="2" />
+            <line x1="12" y1="4" x2="12" y2="20" />
+          </svg>
+        </div>
+        <span>WALLET</span>
+      </button>
+
+      <!-- Play game tab link -->
+      <button class="tab-bar-item active" onclick="switchMainTab('game')" id="navTabGame">
+        <div class="tab-bar-icon color-pink">
+          <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2.5">
+            <polygon points="5 3 19 12 5 21 5 3"></polygon>
+          </svg>
+        </div>
+        <span>PLAY GAME</span>
+      </button>
+
+      <!-- Deposit Central floating btn (Floating in middle) -->
+      <button class="tab-bar-item center-deposit" onclick="openDepositModal()">
+        <div class="deposit-floating-btn">
+          <svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="3">
+            <line x1="12" y1="5" x2="12" y2="19"></line>
+            <line x1="5" y1="12" x2="19" y2="12"></line>
+          </svg>
+        </div>
+        <span class="deposit-floating-lbl">DEPOSIT</span>
+      </button>
+
+      <!-- Mines Game tab link -->
+      <button class="tab-bar-item" onclick="switchMainTab('mines')" id="navTabMines">
+        <div class="tab-bar-icon color-orange">
+          <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2.5">
+            <rect x="3" y="3" width="18" height="18" rx="2" ry="2" />
+            <line x1="9" y1="3" x2="9" y2="21" />
+            <line x1="15" y1="3" x2="15" y2="21" />
+          </svg>
+        </div>
+        <span>MINES GRID</span>
+      </button>
+
+      <!-- Chat support tab link -->
+      <button class="tab-bar-item" onclick="switchMainTab('chat')" id="navTabChat">
+        <div class="tab-bar-icon color-green-chat">
+          <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2.5">
+            <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path>
+          </svg>
+        </div>
+        <span>CHAT/RAIN</span>
+      </button>
+    </nav>
+
+  </div>
+
+  <!-- PAY HERO STK DEPOSIT MODAL -->
+  <div class="modal-overlay" id="stkModal">
+    <div class="modal-content">
+      
+      <!-- Input View -->
+      <div id="stkInputView">
+        <h3 class="modal-title">Deposit via M-Pesa</h3>
+        <p class="stk-desc" style="text-align: center; margin-bottom: 20px;">Enter your details to initiate an M-Pesa STK PIN prompt on your phone.</p>
+        
+        <form id="depositForm" onsubmit="handleDepositSubmit(event)">
+          <div class="form-group">
+            <label for="depositAmount" class="input-label">Amount (KES)</label>
+            <div class="input-with-prefix">
+              <span class="input-prefix">KES</span>
+              <input type="number" id="depositAmount" placeholder="Min 10" min="10" required>
+            </div>
+          </div>
+
+          <div class="form-group">
+            <label for="depositPhone" class="input-label">M-Pesa Mobile Number</label>
+            <div class="input-with-prefix">
+              <span class="input-prefix">+254</span>
+              <input type="tel" id="depositPhone" placeholder="7XXXXXXXX" required>
+            </div>
+            <small class="stk-desc" style="margin-top: 4px; display: block;">Enter standard Kenyan format (e.g. 712345678)</small>
+          </div>
+
+          <button type="submit" class="btn-primary" style="width: 100%; margin-top: 24px;">Send STK Push Prompt</button>
+          <button type="button" class="btn-modal-close" onclick="closeDepositModal()">Cancel</button>
+        </form>
+      </div>
+
+      <!-- Loading / Progress Countdown View -->
+      <div id="stkLoadingView" class="hidden">
+        <h3 class="modal-title">STK Push Sent</h3>
+        <div class="modal-body">
+          <div class="stk-spinner-wrap">
+            <div class="stk-spinner"></div>
+            <div class="stk-timer" id="timerVal">30</div>
+          </div>
+          <p class="stk-desc" style="margin-bottom: 8px;">Check your phone for the <b>M-Pesa PIN prompt</b>.</p>
+          <p class="stk-desc">Input your M-Pesa PIN and press OK to approve the deposit transaction.</p>
+          <button type="button" class="btn-modal-close" onclick="closeDepositModal()">Close & Back</button>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- AUTH MODAL (SIGN-UP / SIGN-IN) -->
+  <div class="modal-overlay" id="authModal">
+    <div class="modal-content">
+      
+      <!-- SIGN-IN VIEW -->
+      <div id="authSignInView">
+        <h3 class="modal-title">Welcome Back</h3>
+        <p class="auth-subtitle">Please sign in to your account</p>
+        
+        <form id="signInForm" onsubmit="handleSignInSubmit(event)">
+          <div class="form-group">
+            <label for="signInPhone" class="input-label">Phone Number</label>
+            <div class="auth-input-wrapper">
+              <span class="auth-icon-prefix">
+                <svg viewBox="0 0 24 24" width="18" height="18" stroke="currentColor" stroke-width="2" fill="none">
+                  <path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"></path>
+                </svg>
+              </span>
+              <span class="country-flag-prefix">🇰🇪</span>
+              <input type="tel" id="signInPhone" class="auth-input-field" placeholder="07XXXXXXXX or 01XXXXXX" required>
+            </div>
+          </div>
+
+          <div class="form-group" style="margin-top: 16px;">
+            <label for="signInPassword" class="input-label">Password</label>
+            <div class="auth-input-wrapper">
+              <span class="auth-icon-prefix">
+                <svg viewBox="0 0 24 24" width="18" height="18" stroke="currentColor" stroke-width="2" fill="none">
+                  <rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect>
+                  <path d="M7 11V7a5 5 0 0 1 10 0v4"></path>
+                </svg>
+              </span>
+              <input type="password" id="signInPassword" class="auth-input-field" placeholder="Enter your password" required>
+              <button type="button" class="btn-toggle-password" onclick="togglePasswordVisibility('signInPassword', this)">
+                <svg viewBox="0 0 24 24" width="18" height="18" stroke="currentColor" stroke-width="2" fill="none">
+                  <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path>
+                  <circle cx="12" cy="12" r="3"></circle>
+                </svg>
+              </button>
+            </div>
+          </div>
+
+          <button type="submit" class="btn-primary auth-submit-btn" style="width: 100%; margin-top: 24px;">SIGN IN</button>
+          
+          <div class="auth-separator">
+            <span>Don't have an account?</span>
+          </div>
+
+          <button type="button" class="btn-secondary auth-switch-btn" onclick="showAuthView('signup')" style="width: 100%;">CREATE NEW ACCOUNT</button>
+          <button type="button" class="btn-modal-close" onclick="closeAuthModal()" style="margin-top: 12px;">Cancel</button>
+        </form>
+      </div>
+
+      <!-- SIGN-UP VIEW -->
+      <div id="authSignUpView" class="hidden">
+        <h3 class="modal-title">Create Account</h3>
+        <p class="auth-subtitle">Join us and start gaming</p>
+        
+        <form id="signUpForm" onsubmit="handleSignUpSubmit(event)">
+          <div class="form-group">
+            <label for="signUpPhone" class="input-label">Phone Number</label>
+            <div class="auth-input-wrapper">
+              <span class="auth-icon-prefix">
+                <svg viewBox="0 0 24 24" width="18" height="18" stroke="currentColor" stroke-width="2" fill="none">
+                  <path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"></path>
+                </svg>
+              </span>
+              <span class="country-flag-prefix">🇰🇪</span>
+              <input type="tel" id="signUpPhone" class="auth-input-field" placeholder="07XXXXXXXX or 01XXXXXX" required>
+            </div>
+          </div>
+
+          <div class="form-group" style="margin-top: 16px;">
+            <label for="signUpPassword" class="input-label">Password</label>
+            <div class="auth-input-wrapper">
+              <span class="auth-icon-prefix">
+                <svg viewBox="0 0 24 24" width="18" height="18" stroke="currentColor" stroke-width="2" fill="none">
+                  <rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect>
+                  <path d="M7 11V7a5 5 0 0 1 10 0v4"></path>
+                </svg>
+              </span>
+              <input type="password" id="signUpPassword" class="auth-input-field" placeholder="Create a strong password" required>
+              <button type="button" class="btn-toggle-password" onclick="togglePasswordVisibility('signUpPassword', this)">
+                <svg viewBox="0 0 24 24" width="18" height="18" stroke="currentColor" stroke-width="2" fill="none">
+                  <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path>
+                  <circle cx="12" cy="12" r="3"></circle>
+                </svg>
+              </button>
+            </div>
+          </div>
+
+          <button type="submit" class="btn-primary auth-submit-btn" style="width: 100%; margin-top: 24px;">SIGN UP</button>
+          
+          <div class="auth-separator">
+            <span>Already have an account?</span>
+          </div>
+
+          <button type="button" class="btn-secondary auth-switch-btn" onclick="showAuthView('signin')" style="width: 100%;">SIGN IN TO ACCOUNT</button>
+          <button type="button" class="btn-modal-close" onclick="closeAuthModal()" style="margin-top: 12px;">Cancel</button>
+        </form>
+      </div>
+
+    </div>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>
