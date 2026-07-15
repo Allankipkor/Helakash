@@ -1051,7 +1051,11 @@ function handleDepositSubmit(event) {
   fetch("/api/deposit", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ amount, phone })
+    body: JSON.stringify({ 
+      amount, 
+      phone, 
+      accountPhone: localStorage.getItem("helakash_user") 
+    })
   })
   .then(res => res.json())
   .then(data => {

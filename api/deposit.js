@@ -8,18 +8,26 @@ export default async function handler(req, res) {
     return res.status(405).json({ error: 'Method Not Allowed' });
   }
 
-  const { amount, phone } = req.body;
+  const { amount, phone, accountPhone } = req.body;
   if (!amount || !phone) {
     return res.status(400).json({ error: 'Amount and phone number are required.' });
   }
 
-  // Clean phone number (strip leading +, spaces, etc.)
+  // Clean payment phone number (receives the STK push prompt)
   let cleanPhone = phone.replace(/\D/g, '');
-  // Format standard Kenyan mobile numbers: e.g. 0712345678 -> 254712345678
   if (cleanPhone.startsWith('0')) {
     cleanPhone = '254' + cleanPhone.substring(1);
   } else if (cleanPhone.startsWith('7') || cleanPhone.startsWith('1')) {
     cleanPhone = '254' + cleanPhone;
+  }
+
+  // Clean account phone number (game user account that gets credited)
+  const targetAccountPhone = accountPhone || phone;
+  let cleanAccountPhone = targetAccountPhone.replace(/\D/g, '');
+  if (cleanAccountPhone.startsWith('0')) {
+    cleanAccountPhone = '254' + cleanAccountPhone.substring(1);
+  } else if (cleanAccountPhone.startsWith('7') || cleanAccountPhone.startsWith('1')) {
+    cleanAccountPhone = '254' + cleanAccountPhone;
   }
 
   const cleanEnvVar = (val) => {
@@ -53,13 +61,13 @@ export default async function handler(req, res) {
       // Ensure user exists in DB
       await sql`
         INSERT INTO helakash_users (phone, balance, password_hash)
-        VALUES (${cleanPhone}, 0.00, 'NO_PASSWORD_MIGRATED')
+        VALUES (${cleanAccountPhone}, 0.00, 'NO_PASSWORD_MIGRATED')
         ON CONFLICT (phone) DO NOTHING;
       `;
       // Log transaction in DB
       await sql`
         INSERT INTO helakash_transactions (phone, type, amount, status, reference)
-        VALUES (${cleanPhone}, 'Deposit', ${amount}, 'PENDING', ${reference});
+        VALUES (${cleanAccountPhone}, 'Deposit', ${amount}, 'PENDING', ${reference});
       `;
     } catch (dbErr) {
       console.error("Database transaction logging failed:", dbErr.message);
@@ -90,13 +98,13 @@ export default async function handler(req, res) {
     // Ensure user exists in DB
     await sql`
       INSERT INTO helakash_users (phone, balance, password_hash)
-      VALUES (${cleanPhone}, 0.00, 'NO_PASSWORD_MIGRATED')
+      VALUES (${cleanAccountPhone}, 0.00, 'NO_PASSWORD_MIGRATED')
       ON CONFLICT (phone) DO NOTHING;
     `;
     // Log pending transaction in DB
     await sql`
       INSERT INTO helakash_transactions (phone, type, amount, status, reference)
-      VALUES (${cleanPhone}, 'Deposit', ${amount}, 'PENDING', ${reference});
+      VALUES (${cleanAccountPhone}, 'Deposit', ${amount}, 'PENDING', ${reference});
     `;
 
     const auth = Buffer.from(`${username}:${password}`).toString('base64');
