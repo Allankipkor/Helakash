@@ -25,11 +25,12 @@ export default async function handler(req, res) {
     }
 
     // Extract parameters from Pay Hero webhook payload
-    // Handle both live webhook formats and simulated manual webhooks
-    const status = callbackData.Status || callbackData.status || (callbackData.ResultCode === 0 ? 'SUCCESS' : 'FAILED');
-    const externalReference = callbackData.ExternalReference || callbackData.external_reference || callbackData.MerchantRequestID;
-    const amount = parseFloat(callbackData.Amount || callbackData.amount || 0);
-    const mpesaReceipt = callbackData.Reference || callbackData.reference || callbackData.MpesaReceiptNumber;
+    // Handle both live webhook formats (nested inside 'response') and simulated manual webhooks
+    const data = callbackData.response || callbackData;
+    const status = data.Status || data.status || (data.ResultCode === 0 ? 'SUCCESS' : 'FAILED');
+    const externalReference = data.ExternalReference || data.external_reference || data.MerchantRequestID;
+    const amount = parseFloat(data.Amount || data.amount || 0);
+    const mpesaReceipt = data.Reference || data.reference || data.MpesaReceiptNumber;
 
     if (!externalReference) {
       return res.status(400).json({ error: "Missing ExternalReference in payload" });
