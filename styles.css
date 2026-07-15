@@ -1567,3 +1567,27 @@ body {
   background: rgba(225, 29, 72, 0.1);
 }
 
+/* Auth Modal inline error alerts */
+.auth-error-msg {
+  color: #f43f5e;
+  background-color: rgba(244, 63, 94, 0.08);
+  border: 1px solid rgba(244, 63, 94, 0.2);
+  padding: 10px 14px;
+  border-radius: 8px;
+  font-size: 0.82rem;
+  margin-bottom: 16px;
+  text-align: center;
+  font-weight: 600;
+  animation: fadeInError 0.2s ease-in-out;
+}
+
+@keyframes fadeInError {
+  from { opacity: 0; transform: translateY(-4px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.auth-error-msg.hidden {
+  display: none !important;
+}
+
+

@@ -1367,15 +1367,38 @@ function triggerSimulatedWinner() {
 // USER AUTHENTICATION & LOGIN FLOW
 // ==========================================================================
 function openAuthModal(viewName = 'signin') {
+  clearAuthErrors();
   document.getElementById("authModal").classList.add("active");
   showAuthView(viewName);
 }
 
 function closeAuthModal() {
   document.getElementById("authModal").classList.remove("active");
+  clearAuthErrors();
   // Reset fields
   document.getElementById("signInForm").reset();
   document.getElementById("signUpForm").reset();
+}
+
+function showAuthError(formId, message) {
+  const errEl = document.getElementById(formId === 'signin' ? 'signInError' : 'signUpError');
+  if (errEl) {
+    errEl.textContent = message;
+    errEl.classList.remove('hidden');
+  }
+}
+
+function clearAuthErrors() {
+  const err1 = document.getElementById('signInError');
+  const err2 = document.getElementById('signUpError');
+  if (err1) {
+    err1.classList.add('hidden');
+    err1.textContent = '';
+  }
+  if (err2) {
+    err2.classList.add('hidden');
+    err2.textContent = '';
+  }
 }
 
 function showAuthView(viewName) {
@@ -1415,6 +1438,7 @@ function togglePasswordVisibility(inputId, btnEl) {
 
 function handleSignInSubmit(event) {
   event.preventDefault();
+  clearAuthErrors();
   
   const phone = document.getElementById("signInPhone").value.trim();
   const password = document.getElementById("signInPassword").value;
@@ -1422,12 +1446,12 @@ function handleSignInSubmit(event) {
   // Format / validate Kenyan number: must start with 07, 01, 7, or 1 and have correct digit count
   let cleanPhone = phone.replace(/\s+/g, '');
   if (!/^(07|01|7|1)\d{8}$/.test(cleanPhone)) {
-    alert("Please enter a valid Kenyan phone number (e.g. 07XXXXXXXX or 01XXXXXXXX)");
+    showAuthError('signin', "Please enter a valid Kenyan phone number (e.g. 07XXXXXXXX or 01XXXXXXXX)");
     return;
   }
   
   if (password.length < 4) {
-    alert("Password must be at least 4 characters long");
+    showAuthError('signin', "Password must be at least 4 characters long");
     return;
   }
   
@@ -1445,7 +1469,7 @@ function handleSignInSubmit(event) {
   .then(res => res.json())
   .then(data => {
     if (!data.success) {
-      alert(`Login failed: ${data.error || 'Incorrect phone number or password.'}`);
+      showAuthError('signin', data.error || 'Incorrect phone number or password.');
     } else {
       // Save active session
       localStorage.setItem("helakash_user", cleanPhone);
@@ -1458,24 +1482,25 @@ function handleSignInSubmit(event) {
   })
   .catch(err => {
     console.error("Login request error:", err);
-    alert("Network error. Please try again.");
+    showAuthError('signin', "Network error. Please try again.");
   });
 }
 
 function handleSignUpSubmit(event) {
   event.preventDefault();
+  clearAuthErrors();
   
   const phone = document.getElementById("signUpPhone").value.trim();
   const password = document.getElementById("signUpPassword").value;
   
   let cleanPhone = phone.replace(/\s+/g, '');
   if (!/^(07|01|7|1)\d{8}$/.test(cleanPhone)) {
-    alert("Please enter a valid Kenyan phone number (e.g. 07XXXXXXXX or 01XXXXXXXX)");
+    showAuthError('signup', "Please enter a valid Kenyan phone number (e.g. 07XXXXXXXX or 01XXXXXXXX)");
     return;
   }
   
   if (password.length < 4) {
-    alert("Password must be at least 4 characters long");
+    showAuthError('signup', "Password must be at least 4 characters long");
     return;
   }
   
@@ -1492,7 +1517,7 @@ function handleSignUpSubmit(event) {
   .then(res => res.json())
   .then(data => {
     if (!data.success) {
-      alert(`Registration failed: ${data.error || 'Please try again.'}`);
+      showAuthError('signup', data.error || 'Please try again.');
     } else {
       // Save active session
       localStorage.setItem("helakash_user", cleanPhone);
@@ -1505,7 +1530,7 @@ function handleSignUpSubmit(event) {
   })
   .catch(err => {
     console.error("Signup request error:", err);
-    alert("Network error. Please try again.");
+    showAuthError('signup', "Network error. Please try again.");
   });
 }
 

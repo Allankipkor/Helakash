@@ -434,6 +434,7 @@
         <p class="auth-subtitle">Please sign in to your account</p>
         
         <form id="signInForm" onsubmit="handleSignInSubmit(event)">
+          <div id="signInError" class="auth-error-msg hidden"></div>
           <div class="form-group">
             <label for="signInPhone" class="input-label">Phone Number</label>
             <div class="auth-input-wrapper">
@@ -483,6 +484,7 @@
         <p class="auth-subtitle">Join us and start gaming</p>
         
         <form id="signUpForm" onsubmit="handleSignUpSubmit(event)">
+          <div id="signUpError" class="auth-error-msg hidden"></div>
           <div class="form-group">
             <label for="signUpPhone" class="input-label">Phone Number</label>
             <div class="auth-input-wrapper">
