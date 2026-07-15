@@ -62,6 +62,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
   // Attach input event listeners to Bet value inputs
   setupConsoleInputs();
+  syncWithDatabase();
 });
 
 function saveBalance() {
@@ -70,6 +71,25 @@ function saveBalance() {
 
 function saveTransactions() {
   localStorage.setItem("helakash_txs", JSON.stringify(transactions));
+}
+
+function syncWithDatabase() {
+  const phone = localStorage.getItem("helakash_user");
+  if (!phone) return;
+
+  fetch(`/api/user-details?phone=${phone}`)
+    .then(res => res.json())
+    .then(data => {
+      if (data.success) {
+        userBalance = data.balance;
+        transactions = data.transactions;
+        saveBalance();
+        saveTransactions();
+        updateBalanceUI();
+        renderTransactionHistory();
+      }
+    })
+    .catch(err => console.error("Database initialization fetch failed:", err));
 }
 
 function updateBalanceUI() {
@@ -90,6 +110,25 @@ function addTransaction(type, amount, status) {
   if (transactions.length > 25) transactions.pop();
   saveTransactions();
   renderTransactionHistory();
+
+  // Sync to database if logged in and not a pending Deposit
+  const phone = localStorage.getItem("helakash_user");
+  if (phone && type !== 'Deposit') {
+    fetch('/api/sync-game', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ phone, type, amount })
+    })
+    .then(res => res.json())
+    .then(data => {
+      if (data.success) {
+        userBalance = data.newBalance;
+        saveBalance();
+        updateBalanceUI();
+      }
+    })
+    .catch(err => console.error("Game sync database update failed:", err));
+  }
 }
 
 function renderTransactionHistory() {
@@ -1021,11 +1060,28 @@ function handleDepositSubmit(event) {
       closeDepositModal();
     } else {
       console.log("STK push initiated:", data);
+      
       if (data.simulated) {
+        // Trigger simulated webhook callback on server after 8 seconds
         setTimeout(() => {
-          simulateDepositSuccess(amount);
-        }, 12000);
+          fetch("/api/callback", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              Status: "SUCCESS",
+              ExternalReference: data.reference,
+              Amount: amount,
+              Reference: "MPESA-SIM-OK"
+            })
+          })
+          .then(res => res.json())
+          .then(resData => console.log("Simulated callback trigger result:", resData))
+          .catch(err => console.error("Simulated callback trigger failed:", err));
+        }, 8000);
       }
+
+      // Start polling for database update
+      pollDepositStatus(phone, data.reference, amount);
     }
   })
   .catch(err => {
@@ -1034,6 +1090,42 @@ function handleDepositSubmit(event) {
       simulateDepositSuccess(amount);
     }, 10000);
   });
+}
+
+function pollDepositStatus(phone, reference, amount) {
+  let attempts = 0;
+  const pollInterval = setInterval(() => {
+    attempts++;
+    
+    // Stop polling after 40 seconds (approx 13 attempts)
+    if (attempts > 13) {
+      clearInterval(pollInterval);
+      alert("⚠️ STK push response timed out. If you made a payment, your balance will update automatically shortly.");
+      closeDepositModal();
+      return;
+    }
+    
+    fetch(`/api/user-details?phone=${phone}`)
+      .then(res => res.json())
+      .then(data => {
+        if (data.success) {
+          // Check if balance has updated on server
+          if (data.balance > userBalance) {
+            clearInterval(pollInterval);
+            userBalance = data.balance;
+            transactions = data.transactions;
+            saveBalance();
+            saveTransactions();
+            updateBalanceUI();
+            renderTransactionHistory();
+            clearInterval(stkTimerInterval);
+            alert(`✅ DEPOSIT RECEIVED! KES ${amount} has been successfully added to your HelaKash wallet.`);
+            closeDepositModal();
+          }
+        }
+      })
+      .catch(err => console.error("Deposit poll error:", err));
+  }, 3000);
 }
 
 function startSTKCountdown(seconds, amount) {
@@ -1048,7 +1140,6 @@ function startSTKCountdown(seconds, amount) {
     
     if (timeLeft <= 0) {
       clearInterval(stkTimerInterval);
-      simulateDepositSuccess(amount);
     }
   }, 1000);
 }
@@ -1086,12 +1177,40 @@ function handleWithdrawSubmit(event) {
     return;
   }
   
+  // Deduct locally for responsive feedback
   userBalance -= amount;
   saveBalance();
   updateBalanceUI();
-  addTransaction(`Withdraw`, -amount, 'Completed');
   
-  alert(`💸 WITHDRAWAL REQUEST SUBMITTED! KES ${amount} is being processed to your phone +${phone}. Updates will reflect in history shortly.`);
+  const activeUser = localStorage.getItem("helakash_user") || phone;
+
+  fetch("/api/withdraw", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ amount, phone: activeUser })
+  })
+  .then(res => res.json())
+  .then(data => {
+    if (!data.success) {
+      // Revert local changes on failure
+      userBalance += amount;
+      saveBalance();
+      updateBalanceUI();
+      alert(`Withdrawal failed: ${data.error || 'Unknown Error'}`);
+    } else {
+      userBalance = data.newBalance;
+      saveBalance();
+      updateBalanceUI();
+      syncWithDatabase();
+      alert(`💸 WITHDRAWAL REQUEST SUBMITTED! KES ${amount} is being processed. Updates will reflect in history shortly.`);
+    }
+  })
+  .catch(err => {
+    console.error("Withdrawal error:", err);
+    // Offline fallback
+    addTransaction(`Withdraw`, -amount, 'Completed');
+    alert(`💸 WITHDRAWAL SUBMITTED (offline mode)! KES ${amount} is being processed.`);
+  });
   
   document.getElementById("withdrawAmount").value = '';
   document.getElementById("withdrawPhone").value = '';
@@ -1322,6 +1441,7 @@ function handleSignInSubmit(event) {
   
   closeAuthModal();
   updateHeaderUI();
+  syncWithDatabase();
   showCustomToast("Login Successful", `Welcome back, user ${cleanPhone}!`);
 }
 
@@ -1351,12 +1471,24 @@ function handleSignUpSubmit(event) {
   
   closeAuthModal();
   updateHeaderUI();
+  syncWithDatabase();
   showCustomToast("Account Created", `Successfully registered ${cleanPhone}!`);
 }
 
 function handleLogout() {
-  const user = localStorage.getItem("helakash_user");
   localStorage.removeItem("helakash_user");
+  localStorage.removeItem("helakash_balance");
+  localStorage.removeItem("helakash_txs");
+  
+  userBalance = 500.00;
+  transactions = [
+    { type: 'Deposit', amount: 250, status: 'Success', date: new Date(Date.now() - 3600000 * 2).toLocaleString() },
+    { type: 'Aviator Win', amount: 35, status: 'Success', date: new Date(Date.now() - 3600000).toLocaleString() }
+  ];
+  saveBalance();
+  saveTransactions();
+  updateBalanceUI();
+  renderTransactionHistory();
   
   updateHeaderUI();
   showCustomToast("Logged Out", "You have signed out of your account.");

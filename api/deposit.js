@@ -1,3 +1,5 @@
+import { sql } from '@vercel/postgres';
+
 export default async function handler(req, res) {
   // Only allow POST requests
   if (req.method !== 'POST') {
@@ -30,26 +32,57 @@ export default async function handler(req, res) {
     // Simulate network delay
     await new Promise(resolve => setTimeout(resolve, 1000));
 
+    const reference = `SIM-HK-${Date.now()}`;
+
+    try {
+      // Ensure user exists in DB
+      await sql`
+        INSERT INTO helakash_users (phone, balance)
+        VALUES (${cleanPhone}, 500.00)
+        ON CONFLICT (phone) DO NOTHING;
+      `;
+      // Log transaction in DB
+      await sql`
+        INSERT INTO helakash_transactions (phone, type, amount, status, reference)
+        VALUES (${cleanPhone}, 'Deposit', ${amount}, 'PENDING', ${reference});
+      `;
+    } catch (dbErr) {
+      console.error("Database transaction logging failed:", dbErr.message);
+    }
+
     return res.status(200).json({
       success: true,
       message: "STK push initiated successfully (SIMULATED)",
-      reference: `SIM-HK-${Date.now()}`,
+      reference: reference,
       simulated: true
     });
   }
 
   try {
+    const reference = `HK-${Date.now()}`;
     const payload = {
       amount: parseInt(amount),
       phone_number: cleanPhone,
       channel_id: parseInt(channelId),
       provider: 'm-pesa',
-      external_reference: `HK-${Date.now()}`
+      external_reference: reference
     };
 
     if (callbackUrl) {
       payload.callback_url = callbackUrl;
     }
+
+    // Ensure user exists in DB
+    await sql`
+      INSERT INTO helakash_users (phone, balance)
+      VALUES (${cleanPhone}, 500.00)
+      ON CONFLICT (phone) DO NOTHING;
+    `;
+    // Log pending transaction in DB
+    await sql`
+      INSERT INTO helakash_transactions (phone, type, amount, status, reference)
+      VALUES (${cleanPhone}, 'Deposit', ${amount}, 'PENDING', ${reference});
+    `;
 
     const auth = Buffer.from(`${username}:${password}`).toString('base64');
 
@@ -64,13 +97,19 @@ export default async function handler(req, res) {
 
     const data = await response.json();
     if (!response.ok) {
+      // Mark transaction as failed in DB
+      await sql`
+        UPDATE helakash_transactions 
+        SET status = 'FAILED' 
+        WHERE reference = ${reference};
+      `;
       return res.status(response.status).json({ error: data.message || 'Pay Hero API Error' });
     }
 
     return res.status(200).json({
       success: true,
       message: data.message || 'STK Push initiated successfully',
-      reference: payload.external_reference,
+      reference: reference,
       response: data
     });
   } catch (error) {
