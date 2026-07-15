@@ -242,7 +242,7 @@ function scrollToSection(sectionId) {
 // GAME 1: AVIATOR (CRASH GAME ENGINE)
 // ==========================================================================
 let aviatorState = 'waiting'; // 'waiting', 'running', 'crashed'
-let aviatorTimer = 5000; // takeoff countdown in ms
+let aviatorTimer = 6500; // takeoff countdown in ms
 let aviatorMultiplier = 1.0;
 let aviatorCrashPoint = 1.0;
 let aviatorHistory = [1.25, 3.42, 1.05, 12.80, 2.05, 59.79, 1.15, 35.00, 2.10];
@@ -371,7 +371,7 @@ function updateConsoleButtonLabel(consoleId) {
 // Reset loop state
 function resetAviatorRound() {
   aviatorState = 'waiting';
-  aviatorTimer = 5000;
+  aviatorTimer = 6500;
   aviatorMultiplier = 1.0;
   lastTimerTickTime = Date.now();
   
@@ -444,7 +444,7 @@ function drawAviatorWaitingState() {
   ctx.fillStyle = "rgba(255,255,255,0.03)";
   ctx.fillRect(40, height - 30, width - 80, 6);
   
-  const progress = (5000 - aviatorTimer) / 5000;
+  const progress = (6500 - aviatorTimer) / 6500;
   ctx.fillStyle = "var(--secondary)";
   ctx.fillRect(40, height - 30, (width - 80) * progress, 6);
   
@@ -508,8 +508,8 @@ function tickFlyingRound(now) {
   
   const elapsed = now - flightStartTime;
   
-  // Growth speed curve: completely steady linear growth (adds 1.0x every 7 seconds)
-  const currentMult = 1.0 + (elapsed / 7000);
+  // Growth speed curve: slight acceleration (divisor: 7500ms, exponent: 1.2)
+  const currentMult = 1.0 + Math.pow(elapsed / 7500, 1.2);
   aviatorMultiplier = currentMult;
   
   // Update multiplier center value
