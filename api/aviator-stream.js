@@ -24,29 +24,60 @@ export default async function handler(req, res) {
     }
   }
 
-  // Generate game round details
-  const instantCrash = Math.random() < 0.02; // 2% instant crash
-  let crashPoint = 1.00;
-  if (!instantCrash) {
-    // Generate crash point.
-    // Cap at 15.00x so it safely fits within the Vercel 60s execution limit (60s corresponds to ~13.1x).
-    crashPoint = Math.max(1.01, 0.98 / Math.random());
-    if (crashPoint > 15.00) crashPoint = 15.00;
+  // Helper function to generate crash point securely
+  function generateCrashPoint() {
+    const instantCrash = Math.random() < 0.02; // 2% instant crash
+    if (instantCrash) return 1.00;
+    let point = Math.max(1.01, 0.98 / Math.random());
+    if (point > 15.00) point = 15.00;
+    return parseFloat(point.toFixed(2));
+  }
+
+  let crashPoint, crashPoint2, crashPoint3;
+  try {
+    const existing = await sql`
+      SELECT crash_point, crash_point_2, crash_point_3 FROM helakash_active_rounds WHERE phone = ${cleanPhone};
+    `;
+
+    if (existing.rows.length > 0) {
+      // Shift points: crash_point_2 becomes crash_point, crash_point_3 becomes crash_point_2, and new crash_point_3
+      const row = existing.rows[0];
+      crashPoint = parseFloat(row.crash_point_2) || generateCrashPoint();
+      crashPoint2 = parseFloat(row.crash_point_3) || generateCrashPoint();
+      crashPoint3 = generateCrashPoint();
+
+      console.log(`Shifting crash points for ${cleanPhone}: ${row.crash_point} -> ${crashPoint} -> ${crashPoint2} -> ${crashPoint3}`);
+
+      await sql`
+        UPDATE helakash_active_rounds
+        SET crash_point = ${crashPoint},
+            crash_point_2 = ${crashPoint2},
+            crash_point_3 = ${crashPoint3},
+            status = 'ACTIVE',
+            created_at = NOW()
+        WHERE phone = ${cleanPhone};
+      `;
+    } else {
+      // Create new initial set of 3 crash points
+      crashPoint = generateCrashPoint();
+      crashPoint2 = generateCrashPoint();
+      crashPoint3 = generateCrashPoint();
+
+      console.log(`Generating initial crash points for ${cleanPhone}: ${crashPoint}, ${crashPoint2}, ${crashPoint3}`);
+
+      await sql`
+        INSERT INTO helakash_active_rounds (phone, crash_point, crash_point_2, crash_point_3, status)
+        VALUES (${cleanPhone}, ${crashPoint}, ${crashPoint2}, ${crashPoint3}, 'ACTIVE');
+      `;
+    }
+  } catch (dbError) {
+    console.error("DB error in aviator-stream initialization:", dbError);
+    crashPoint = generateCrashPoint();
+    crashPoint2 = generateCrashPoint();
+    crashPoint3 = generateCrashPoint();
   }
 
   console.log(`Starting secure Aviator stream for ${cleanPhone}. Crash limit: ${crashPoint.toFixed(2)}`);
-
-  // Write active round to DB
-  try {
-    await sql`
-      INSERT INTO helakash_active_rounds (phone, crash_point)
-      VALUES (${cleanPhone}, ${crashPoint})
-      ON CONFLICT (phone)
-      DO UPDATE SET crash_point = ${crashPoint}, created_at = NOW();
-    `;
-  } catch (error) {
-    console.error("DB insert error in aviator-stream:", error);
-  }
 
   // Set SSE Headers
   res.writeHead(200, {
@@ -131,10 +162,12 @@ export default async function handler(req, res) {
 async function cleanUpRound(phone) {
   try {
     await sql`
-      DELETE FROM helakash_active_rounds WHERE phone = ${phone};
+      UPDATE helakash_active_rounds 
+      SET status = 'CRASHED' 
+      WHERE phone = ${phone};
     `;
-    console.log(`Cleaned up active round for ${phone}`);
+    console.log(`Marked active round as CRASHED for ${phone}`);
   } catch (error) {
-    console.error("DB delete error in stream cleanup:", error);
+    console.error("DB update error in stream cleanup:", error);
   }
 }

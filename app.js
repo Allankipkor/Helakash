@@ -1703,14 +1703,30 @@ function fetchAdminNextCrash() {
       if (data.success && data.crash_point) {
         document.getElementById("adminNextCrashVal").textContent = `x${data.crash_point.toFixed(2)}`;
         document.getElementById("adminNextCrashVal").style.color = "var(--primary)";
+        
+        if (data.crash_point_2) {
+          document.getElementById("adminNextCrashVal2").textContent = `x${data.crash_point_2.toFixed(2)}`;
+        } else {
+          document.getElementById("adminNextCrashVal2").textContent = "x?.??";
+        }
+        
+        if (data.crash_point_3) {
+          document.getElementById("adminNextCrashVal3").textContent = `x${data.crash_point_3.toFixed(2)}`;
+        } else {
+          document.getElementById("adminNextCrashVal3").textContent = "x?.??";
+        }
       } else {
         document.getElementById("adminNextCrashVal").textContent = "x?.??";
         document.getElementById("adminNextCrashVal").style.color = "var(--text-gray)";
+        document.getElementById("adminNextCrashVal2").textContent = "x?.??";
+        document.getElementById("adminNextCrashVal3").textContent = "x?.??";
       }
     })
     .catch(err => {
       console.error("Admin predictor error:", err);
       document.getElementById("adminNextCrashVal").textContent = "Error";
       document.getElementById("adminNextCrashVal").style.color = "var(--danger)";
+      document.getElementById("adminNextCrashVal2").textContent = "Error";
+      document.getElementById("adminNextCrashVal3").textContent = "Error";
     });
 }

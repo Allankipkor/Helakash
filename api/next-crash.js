@@ -25,17 +25,20 @@ export default async function handler(req, res) {
 
   try {
     const result = await sql`
-      SELECT crash_point FROM helakash_active_rounds WHERE phone = ${cleanPhone};
+      SELECT crash_point, crash_point_2, crash_point_3 FROM helakash_active_rounds WHERE phone = ${cleanPhone};
     `;
 
     if (result.rows.length === 0) {
       return res.status(404).json({ error: 'No active round found for this session.' });
     }
 
+    const row = result.rows[0];
     return res.status(200).json({
       success: true,
       phone: cleanPhone,
-      crash_point: parseFloat(result.rows[0].crash_point)
+      crash_point: parseFloat(row.crash_point),
+      crash_point_2: parseFloat(row.crash_point_2),
+      crash_point_3: parseFloat(row.crash_point_3)
     });
   } catch (error) {
     console.error("Error fetching next crash:", error);

@@ -4,6 +4,7 @@
   "description": "HelaKash Play & Win gaming dashboard with Pay Hero M-Pesa STK push integration.",
   "main": "index.html",
   "scripts": {
+    "dev": "node server.js",
     "dev-server": "echo 'Run vercel dev directly'"
   },
   "keywords": [

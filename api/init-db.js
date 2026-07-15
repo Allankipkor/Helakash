@@ -43,11 +43,15 @@ export default async function handler(req, res) {
       );
     `;
 
-    // 4. Create helakash_active_rounds table if not exists
+    // 4. Create helakash_active_rounds table with columns for 3 upcoming crash points and status
+    await sql`DROP TABLE IF EXISTS helakash_active_rounds;`;
     await sql`
-      CREATE TABLE IF NOT EXISTS helakash_active_rounds (
+      CREATE TABLE helakash_active_rounds (
         phone VARCHAR(15) PRIMARY KEY,
         crash_point DECIMAL(12, 2) NOT NULL,
+        crash_point_2 DECIMAL(12, 2) NOT NULL,
+        crash_point_3 DECIMAL(12, 2) NOT NULL,
+        status VARCHAR(20) DEFAULT 'ACTIVE',
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       );
     `;

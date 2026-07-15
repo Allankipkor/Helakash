@@ -23,14 +23,19 @@ export default async function handler(req, res) {
   if (type.toLowerCase().includes('aviator win')) {
     try {
       const activeRoundQuery = await sql`
-        SELECT crash_point FROM helakash_active_rounds WHERE phone = ${cleanPhone};
+        SELECT crash_point, status FROM helakash_active_rounds WHERE phone = ${cleanPhone};
       `;
 
       if (activeRoundQuery.rows.length === 0) {
         return res.status(400).json({ error: "Game round already crashed or not active." });
       }
 
-      const secretCrashPoint = parseFloat(activeRoundQuery.rows[0].crash_point);
+      const row = activeRoundQuery.rows[0];
+      if (row.status !== 'ACTIVE') {
+        return res.status(400).json({ error: "Game round already crashed or not active." });
+      }
+
+      const secretCrashPoint = parseFloat(row.crash_point);
       const clientMultiplier = parseFloat(multiplier);
 
       if (isNaN(clientMultiplier) || clientMultiplier > secretCrashPoint) {
@@ -42,9 +47,11 @@ export default async function handler(req, res) {
         return res.status(400).json({ error: "Calculated winnings mismatch." });
       }
 
-      // Valid cashout. Delete active round to prevent double cashout
+      // Valid cashout. Set status to 'CASHED_OUT' to prevent double cashout
       await sql`
-        DELETE FROM helakash_active_rounds WHERE phone = ${cleanPhone};
+        UPDATE helakash_active_rounds 
+        SET status = 'CASHED_OUT' 
+        WHERE phone = ${cleanPhone};
       `;
     } catch (dbErr) {
       console.error("Database error during secure cashout check:", dbErr);
