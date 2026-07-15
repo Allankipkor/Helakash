@@ -1019,6 +1019,7 @@ function openDepositModal() {
   document.getElementById("stkModal").classList.add("active");
   document.getElementById("stkLoadingView").classList.add("hidden");
   document.getElementById("stkInputView").classList.remove("hidden");
+  document.getElementById("depositAmount").value = 50;
 }
 
 function closeDepositModal() {
