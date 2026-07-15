@@ -508,8 +508,8 @@ function tickFlyingRound(now) {
   
   const elapsed = now - flightStartTime;
   
-  // Growth speed curve: at 3s = 1.1x, at 6s = 1.5x
-  const currentMult = 1.0 + Math.pow(elapsed / 8000, 2.2);
+  // Growth speed curve: completely steady linear growth (adds 1.0x every 6 seconds)
+  const currentMult = 1.0 + (elapsed / 6000);
   aviatorMultiplier = currentMult;
   
   // Update multiplier center value
