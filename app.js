@@ -242,7 +242,7 @@ function scrollToSection(sectionId) {
 // GAME 1: AVIATOR (CRASH GAME ENGINE)
 // ==========================================================================
 let aviatorState = 'waiting'; // 'waiting', 'running', 'crashed'
-let aviatorTimer = 6500; // takeoff countdown in ms
+let aviatorTimer = 7500; // takeoff countdown in ms
 let aviatorMultiplier = 1.0;
 let aviatorCrashPoint = 1.0;
 let aviatorEventSource = null;
@@ -372,7 +372,7 @@ function updateConsoleButtonLabel(consoleId) {
 // Reset loop state
 function resetAviatorRound() {
   aviatorState = 'waiting';
-  aviatorTimer = 6500;
+  aviatorTimer = 7500;
   aviatorMultiplier = 1.0;
   lastTimerTickTime = Date.now();
   
@@ -491,7 +491,7 @@ function drawAviatorWaitingState() {
   ctx.fillStyle = "rgba(255,255,255,0.03)";
   ctx.fillRect(40, height - 30, width - 80, 6);
   
-  const progress = (6500 - aviatorTimer) / 6500;
+  const progress = (7500 - aviatorTimer) / 7500;
   ctx.fillStyle = "var(--secondary)";
   ctx.fillRect(40, height - 30, (width - 80) * progress, 6);
   

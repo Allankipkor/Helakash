@@ -60,8 +60,8 @@ export default async function handler(req, res) {
     if (res.flush) res.flush();
   };
 
-  // 1. Waiting / Takeoff countdown phase (6500ms)
-  const countdownDuration = 6500;
+  // 1. Waiting / Takeoff countdown phase (7500ms)
+  const countdownDuration = 7500;
   const countdownInterval = 100;
   let countdownElapsed = 0;
 
