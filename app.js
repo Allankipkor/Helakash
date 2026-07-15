@@ -3,7 +3,7 @@
 // ==========================================================================
 
 // Global state variables
-let userBalance = 500.00; // Starting virtual balance
+let userBalance = 0.00; // Starting production balance (synced from DB)
 let transactions = [];
 let activeMainTab = 'game'; // 'game', 'mines', 'wallet', 'chat'
 let activeBetConsoleTab = 'selector'; // 'selector', 'ai'
@@ -1071,7 +1071,7 @@ function handleDepositSubmit(event) {
               Status: "SUCCESS",
               ExternalReference: data.reference,
               Amount: amount,
-              Reference: "MPESA-SIM-OK"
+              Reference: "MPESA-SIM-" + Date.now()
             })
           })
           .then(res => res.json())
@@ -1436,13 +1436,30 @@ function handleSignInSubmit(event) {
     cleanPhone = '0' + cleanPhone;
   }
   
-  // Save active session
-  localStorage.setItem("helakash_user", cleanPhone);
-  
-  closeAuthModal();
-  updateHeaderUI();
-  syncWithDatabase();
-  showCustomToast("Login Successful", `Welcome back, user ${cleanPhone}!`);
+  // Authenticate against database
+  fetch("/api/login", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ phone: cleanPhone, password })
+  })
+  .then(res => res.json())
+  .then(data => {
+    if (!data.success) {
+      alert(`Login failed: ${data.error || 'Incorrect phone number or password.'}`);
+    } else {
+      // Save active session
+      localStorage.setItem("helakash_user", cleanPhone);
+      
+      closeAuthModal();
+      updateHeaderUI();
+      syncWithDatabase();
+      showCustomToast("Login Successful", `Welcome back, user ${cleanPhone}!`);
+    }
+  })
+  .catch(err => {
+    console.error("Login request error:", err);
+    alert("Network error. Please try again.");
+  });
 }
 
 function handleSignUpSubmit(event) {
@@ -1466,13 +1483,30 @@ function handleSignUpSubmit(event) {
     cleanPhone = '0' + cleanPhone;
   }
   
-  // Save active session
-  localStorage.setItem("helakash_user", cleanPhone);
-  
-  closeAuthModal();
-  updateHeaderUI();
-  syncWithDatabase();
-  showCustomToast("Account Created", `Successfully registered ${cleanPhone}!`);
+  // Register against database
+  fetch("/api/signup", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ phone: cleanPhone, password })
+  })
+  .then(res => res.json())
+  .then(data => {
+    if (!data.success) {
+      alert(`Registration failed: ${data.error || 'Please try again.'}`);
+    } else {
+      // Save active session
+      localStorage.setItem("helakash_user", cleanPhone);
+      
+      closeAuthModal();
+      updateHeaderUI();
+      syncWithDatabase();
+      showCustomToast("Account Created", `Successfully registered ${cleanPhone}!`);
+    }
+  })
+  .catch(err => {
+    console.error("Signup request error:", err);
+    alert("Network error. Please try again.");
+  });
 }
 
 function handleLogout() {
@@ -1480,11 +1514,8 @@ function handleLogout() {
   localStorage.removeItem("helakash_balance");
   localStorage.removeItem("helakash_txs");
   
-  userBalance = 500.00;
-  transactions = [
-    { type: 'Deposit', amount: 250, status: 'Success', date: new Date(Date.now() - 3600000 * 2).toLocaleString() },
-    { type: 'Aviator Win', amount: 35, status: 'Success', date: new Date(Date.now() - 3600000).toLocaleString() }
-  ];
+  userBalance = 0.00;
+  transactions = [];
   saveBalance();
   saveTransactions();
   updateBalanceUI();
