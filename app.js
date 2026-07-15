@@ -473,7 +473,7 @@ function startAviatorRound() {
   lockConsoleForTakeoff('A', activeBetA);
   lockConsoleForTakeoff('B', activeBetB);
   
-  document.getElementById("aviatorStatusText").textContent = "Plane is airborne!";
+  document.getElementById("aviatorStatusText").textContent = "";
   document.getElementById("aviatorStatusText").style.color = "var(--primary)";
   
   // Fetch values of auto cashout inputs
@@ -508,8 +508,8 @@ function tickFlyingRound(now) {
   
   const elapsed = now - flightStartTime;
   
-  // Growth speed curve: at 3s = 2.0x, at 6s = 5.0x, at 10s = 12.0x
-  const currentMult = 1.0 + Math.pow(elapsed / 3000, 2.2);
+  // Growth speed curve: at 3s = 1.5x, at 6s = 3.4x
+  const currentMult = 1.0 + Math.pow(elapsed / 4000, 2.2);
   aviatorMultiplier = currentMult;
   
   // Update multiplier center value
