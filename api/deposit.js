@@ -34,7 +34,11 @@ export default async function handler(req, res) {
   const username = cleanEnvVar(process.env.PAYHERO_USERNAME);
   const password = cleanEnvVar(process.env.PAYHERO_PASSWORD);
   const channelId = cleanEnvVar(process.env.PAYHERO_CHANNEL_ID);
-  const callbackUrl = cleanEnvVar(process.env.PAYHERO_CALLBACK_URL);
+  let callbackUrl = cleanEnvVar(process.env.PAYHERO_CALLBACK_URL);
+  if (!callbackUrl && req.headers && req.headers.host) {
+    const protocol = req.headers.host.includes('localhost') || req.headers.host.includes('127.0.0.1') ? 'http' : 'https';
+    callbackUrl = `${protocol}://${req.headers.host}/api/callback`;
+  }
 
   // Fallback to SIMULATED mode if credentials are missing
   if (!username || !password || !channelId) {
