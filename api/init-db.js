@@ -43,6 +43,15 @@ export default async function handler(req, res) {
       );
     `;
 
+    // 4. Create helakash_active_rounds table if not exists
+    await sql`
+      CREATE TABLE IF NOT EXISTS helakash_active_rounds (
+        phone VARCHAR(15) PRIMARY KEY,
+        crash_point DECIMAL(12, 2) NOT NULL,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      );
+    `;
+
     return res.status(200).json({ success: true, message: "HelaKash production database tables initialized successfully" });
   } catch (error) {
     console.error("Database initialization error:", error);

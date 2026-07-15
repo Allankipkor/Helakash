@@ -7,7 +7,7 @@ export default async function handler(req, res) {
     return res.status(405).json({ error: 'Method Not Allowed' });
   }
 
-  const { phone, type, amount } = req.body;
+  const { phone, type, amount, multiplier, betAmount } = req.body;
   if (!phone || !type || amount === undefined) {
     return res.status(400).json({ error: 'Phone, type, and amount are required.' });
   }
@@ -17,6 +17,39 @@ export default async function handler(req, res) {
     cleanPhone = '254' + cleanPhone.substring(1);
   } else if (cleanPhone.startsWith('7') || cleanPhone.startsWith('1')) {
     cleanPhone = '254' + cleanPhone;
+  }
+
+  // Security Check: If it is an Aviator Win transaction, validate client-side multiplier with server-side crash_point
+  if (type.toLowerCase().includes('aviator win')) {
+    try {
+      const activeRoundQuery = await sql`
+        SELECT crash_point FROM helakash_active_rounds WHERE phone = ${cleanPhone};
+      `;
+
+      if (activeRoundQuery.rows.length === 0) {
+        return res.status(400).json({ error: "Game round already crashed or not active." });
+      }
+
+      const secretCrashPoint = parseFloat(activeRoundQuery.rows[0].crash_point);
+      const clientMultiplier = parseFloat(multiplier);
+
+      if (isNaN(clientMultiplier) || clientMultiplier > secretCrashPoint) {
+        return res.status(400).json({ error: `Invalid cashout! Round crashed at x${secretCrashPoint.toFixed(2)}.` });
+      }
+
+      const expectedWinnings = parseFloat(betAmount) * clientMultiplier;
+      if (Math.abs(expectedWinnings - parseFloat(amount)) > 0.1) {
+        return res.status(400).json({ error: "Calculated winnings mismatch." });
+      }
+
+      // Valid cashout. Delete active round to prevent double cashout
+      await sql`
+        DELETE FROM helakash_active_rounds WHERE phone = ${cleanPhone};
+      `;
+    } catch (dbErr) {
+      console.error("Database error during secure cashout check:", dbErr);
+      return res.status(500).json({ error: "Database error during secure cashout verification." });
+    }
   }
 
   try {

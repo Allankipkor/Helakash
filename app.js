@@ -99,7 +99,7 @@ function updateBalanceUI() {
   if (walletBalanceEl) walletBalanceEl.textContent = formatted;
 }
 
-function addTransaction(type, amount, status) {
+function addTransaction(type, amount, status, multiplier = null, betAmount = null) {
   const tx = {
     type,
     amount,
@@ -117,7 +117,7 @@ function addTransaction(type, amount, status) {
     fetch('/api/sync-game', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ phone, type, amount })
+      body: JSON.stringify({ phone, type, amount, multiplier, betAmount })
     })
     .then(res => res.json())
     .then(data => {
@@ -245,6 +245,7 @@ let aviatorState = 'waiting'; // 'waiting', 'running', 'crashed'
 let aviatorTimer = 6500; // takeoff countdown in ms
 let aviatorMultiplier = 1.0;
 let aviatorCrashPoint = 1.0;
+let aviatorEventSource = null;
 let aviatorHistory = [1.25, 3.42, 1.05, 12.80, 2.05, 59.79, 1.15, 35.00, 2.10];
 let aviatorRoundIdNum = 454879;
 
@@ -390,8 +391,74 @@ function resetAviatorRound() {
   
   if (aviatorAnimationId) cancelAnimationFrame(aviatorAnimationId);
   
-  // Run loop
-  tickWaitingRound();
+  // Close any existing event source
+  if (aviatorEventSource) {
+    try {
+      aviatorEventSource.close();
+    } catch(err) {
+      console.error(err);
+    }
+  }
+
+  // Get or create guest session ID
+  let guestId = localStorage.getItem("helakash_guest_id");
+  if (!guestId) {
+    guestId = `guest_${Math.random().toString(36).substring(2, 9)}`;
+    localStorage.setItem("helakash_guest_id", guestId);
+  }
+  const phone = localStorage.getItem("helakash_user") || guestId;
+
+  // Connect to the secure backend stream
+  aviatorEventSource = new EventSource(`/api/aviator-stream?phone=${encodeURIComponent(phone)}`);
+
+  aviatorEventSource.addEventListener('waiting', (e) => {
+    const data = JSON.parse(e.data);
+    aviatorTimer = data.remaining;
+    const seconds = (aviatorTimer / 1000).toFixed(1);
+    document.getElementById("aviatorStatusText").textContent = `Taking off in ${seconds}s`;
+    drawAviatorWaitingState();
+  });
+
+  aviatorEventSource.addEventListener('tick', (e) => {
+    const data = JSON.parse(e.data);
+    
+    if (aviatorState !== 'running') {
+      aviatorState = 'running';
+      flightStartTime = Date.now();
+      particleList = [];
+      
+      lockConsoleForTakeoff('A', activeBetA);
+      lockConsoleForTakeoff('B', activeBetB);
+      
+      document.getElementById("aviatorStatusText").textContent = "";
+      document.getElementById("aviatorStatusText").style.color = "var(--primary)";
+      
+      if (autoCashoutActiveA) {
+        autoCashoutValA = parseFloat(document.getElementById("autoValA").value) || 1.20;
+      }
+      if (autoCashoutActiveB) {
+        autoCashoutValB = parseFloat(document.getElementById("autoValB").value) || 1.20;
+      }
+
+      tickFlyingRound();
+    }
+  });
+
+  aviatorEventSource.addEventListener('crashed', (e) => {
+    const data = JSON.parse(e.data);
+    aviatorMultiplier = data.multiplier;
+    
+    if (aviatorEventSource) {
+      aviatorEventSource.close();
+      aviatorEventSource = null;
+    }
+
+    resolveAviatorCrash();
+  });
+
+  aviatorEventSource.onerror = (err) => {
+    console.error("Aviator stream error:", err);
+  };
 }
 
 function resetConsoleUI(consoleId, hasBet, amount) {
@@ -405,26 +472,6 @@ function resetConsoleUI(consoleId, hasBet, amount) {
   } else {
     btn.className = "btn-console-action";
     btn.innerHTML = `<span class="action-btn-lbl">BET</span><span class="action-btn-amount">${amount.toFixed(2)} KES</span>`;
-  }
-}
-
-function tickWaitingRound() {
-  if (aviatorState !== 'waiting') return;
-  
-  const now = Date.now();
-  const diff = now - lastTimerTickTime;
-  lastTimerTickTime = now;
-  
-  aviatorTimer -= diff;
-  if (aviatorTimer <= 0) {
-    aviatorTimer = 0;
-    startAviatorRound();
-  } else {
-    const seconds = (aviatorTimer / 1000).toFixed(1);
-    document.getElementById("aviatorStatusText").textContent = `Taking off in ${seconds}s`;
-    
-    drawAviatorWaitingState();
-    requestAnimationFrame(tickWaitingRound);
   }
 }
 
@@ -453,41 +500,6 @@ function drawAviatorWaitingState() {
   ctx.restore();
 }
 
-function startAviatorRound() {
-  aviatorState = 'running';
-  flightStartTime = performance.now();
-  particleList = [];
-  
-  // Calculate flight crash point
-  const instantCrash = Math.random() < 0.02; // 2% instant crash
-  if (instantCrash) {
-    aviatorCrashPoint = 1.00;
-  } else {
-    aviatorCrashPoint = Math.max(1.01, 0.98 / Math.random());
-    if (aviatorCrashPoint > 1000) aviatorCrashPoint = 1000;
-  }
-  
-  console.log("Airborne Round Crash Limit:", aviatorCrashPoint.toFixed(2));
-  
-  // Lock Console Buttons depending on bet presence
-  lockConsoleForTakeoff('A', activeBetA);
-  lockConsoleForTakeoff('B', activeBetB);
-  
-  document.getElementById("aviatorStatusText").textContent = "";
-  document.getElementById("aviatorStatusText").style.color = "var(--primary)";
-  
-  // Fetch values of auto cashout inputs
-  if (autoCashoutActiveA) {
-    autoCashoutValA = parseFloat(document.getElementById("autoValA").value) || 1.20;
-  }
-  if (autoCashoutActiveB) {
-    autoCashoutValB = parseFloat(document.getElementById("autoValB").value) || 1.20;
-  }
-  
-  // Start takeoff tick
-  tickFlyingRound(performance.now());
-}
-
 function lockConsoleForTakeoff(consoleId, hasBet) {
   const btn = document.getElementById(`btnAction${consoleId}`);
   if (!btn) return;
@@ -503,10 +515,10 @@ function lockConsoleForTakeoff(consoleId, hasBet) {
   }
 }
 
-function tickFlyingRound(now) {
+function tickFlyingRound() {
   if (aviatorState !== 'running') return;
   
-  const elapsed = now - flightStartTime;
+  const elapsed = Date.now() - flightStartTime;
   
   // Growth speed curve: slight acceleration (divisor: 7500ms, exponent: 1.2)
   const currentMult = 1.0 + Math.pow(elapsed / 7500, 1.2);
@@ -527,13 +539,8 @@ function tickFlyingRound(now) {
   updateConsoleWinnings('A', activeBetA, currentMult);
   updateConsoleWinnings('B', activeBetB, currentMult);
   
-  // Check if crashed
-  if (currentMult >= aviatorCrashPoint) {
-    resolveAviatorCrash();
-  } else {
-    drawAviatorFlyingFrame(elapsed);
-    aviatorAnimationId = requestAnimationFrame(tickFlyingRound);
-  }
+  drawAviatorFlyingFrame(elapsed);
+  aviatorAnimationId = requestAnimationFrame(tickFlyingRound);
 }
 
 function updateConsoleWinnings(consoleId, hasBet, mult) {
@@ -834,7 +841,7 @@ function cashOutConsoleBet(consoleId, multiplier) {
   saveBalance();
   updateBalanceUI();
   
-  addTransaction(`Aviator Win ${consoleId}`, winnings, 'Success');
+  addTransaction(`Aviator Win ${consoleId}`, winnings, 'Success', multiplier, betVal);
   
   if (isA) {
     activeBetA = false;
@@ -1635,4 +1642,75 @@ function showCustomToast(title, desc) {
       toast.remove();
     }, 400);
   }, 5000);
+}
+
+// ==========================================================================
+// SECRET ADMIN PREDICTOR
+// ==========================================================================
+let logoClickCount = 0;
+let logoClickTimer = null;
+let adminPollInterval = null;
+
+function handleBrandLogoClick(event) {
+  event.preventDefault();
+  logoClickCount++;
+  
+  if (logoClickTimer) clearTimeout(logoClickTimer);
+  logoClickTimer = setTimeout(() => {
+    logoClickCount = 0;
+  }, 3000); // Reset count if not clicked 5 times within 3 seconds
+  
+  if (logoClickCount >= 5) {
+    logoClickCount = 0;
+    clearTimeout(logoClickTimer);
+    openAdminPredictorModal();
+  }
+}
+
+function openAdminPredictorModal() {
+  document.getElementById("adminPredictorModal").classList.add("active");
+  
+  let guestId = localStorage.getItem("helakash_guest_id");
+  if (!guestId) {
+    guestId = `guest_${Math.random().toString(36).substring(2, 9)}`;
+    localStorage.setItem("helakash_guest_id", guestId);
+  }
+  const phone = localStorage.getItem("helakash_user") || guestId;
+  document.getElementById("adminTargetPhone").value = phone;
+  
+  fetchAdminNextCrash();
+  
+  // Start polling every second while the modal is open
+  if (adminPollInterval) clearInterval(adminPollInterval);
+  adminPollInterval = setInterval(fetchAdminNextCrash, 1000);
+}
+
+function closeAdminPredictorModal() {
+  document.getElementById("adminPredictorModal").classList.remove("active");
+  if (adminPollInterval) {
+    clearInterval(adminPollInterval);
+    adminPollInterval = null;
+  }
+}
+
+function fetchAdminNextCrash() {
+  const phone = document.getElementById("adminTargetPhone").value;
+  if (!phone) return;
+  
+  fetch(`/api/next-crash?phone=${encodeURIComponent(phone)}`)
+    .then(res => res.json())
+    .then(data => {
+      if (data.success && data.crash_point) {
+        document.getElementById("adminNextCrashVal").textContent = `x${data.crash_point.toFixed(2)}`;
+        document.getElementById("adminNextCrashVal").style.color = "var(--primary)";
+      } else {
+        document.getElementById("adminNextCrashVal").textContent = "x?.??";
+        document.getElementById("adminNextCrashVal").style.color = "var(--text-gray)";
+      }
+    })
+    .catch(err => {
+      console.error("Admin predictor error:", err);
+      document.getElementById("adminNextCrashVal").textContent = "Error";
+      document.getElementById("adminNextCrashVal").style.color = "var(--danger)";
+    });
 }
