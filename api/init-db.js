@@ -34,6 +34,15 @@ export default async function handler(req, res) {
       );
     `;
 
+    // 3. Create helakash_webhook_logs table if not exists
+    await sql`
+      CREATE TABLE IF NOT EXISTS helakash_webhook_logs (
+        id SERIAL PRIMARY KEY,
+        payload JSONB NOT NULL,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      );
+    `;
+
     return res.status(200).json({ success: true, message: "HelaKash production database tables initialized successfully" });
   } catch (error) {
     console.error("Database initialization error:", error);

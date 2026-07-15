@@ -14,6 +14,16 @@ export default async function handler(req, res) {
     console.log(JSON.stringify(callbackData, null, 2));
     console.log("=========================================");
 
+    // Log webhook payload to DB for debugging
+    try {
+      await sql`
+        INSERT INTO helakash_webhook_logs (payload)
+        VALUES (${JSON.stringify(callbackData)});
+      `;
+    } catch (logErr) {
+      console.error("Failed to log webhook to DB:", logErr.message);
+    }
+
     // Extract parameters from Pay Hero webhook payload
     // Handle both live webhook formats and simulated manual webhooks
     const status = callbackData.Status || callbackData.status || (callbackData.ResultCode === 0 ? 'SUCCESS' : 'FAILED');
