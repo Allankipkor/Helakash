@@ -1,4 +1,6 @@
-import { sql } from '@vercel/postgres';
+import { neon } from '@neondatabase/serverless';
+
+const sql = neon(process.env.POSTGRES_URL || process.env.DATABASE_URL, { fullResults: true });
 
 export default async function handler(req, res) {
   // Allow GET or POST
@@ -23,10 +25,10 @@ export default async function handler(req, res) {
     `;
 
     if (userQuery.rows.length === 0) {
-      // Create user with starting balance of 500 KES
+      // Create user with starting balance of 0 KES (production real money mode)
       await sql`
-        INSERT INTO helakash_users (phone, balance) 
-        VALUES (${cleanPhone}, 500.00);
+        INSERT INTO helakash_users (phone, balance, password_hash) 
+        VALUES (${cleanPhone}, 0.00, 'NO_PASSWORD_MIGRATED');
       `;
       userQuery = await sql`
         SELECT balance FROM helakash_users WHERE phone = ${cleanPhone};

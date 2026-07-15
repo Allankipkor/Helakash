@@ -1,4 +1,6 @@
-import { sql } from '@vercel/postgres';
+import { neon } from '@neondatabase/serverless';
+
+const sql = neon(process.env.POSTGRES_URL || process.env.DATABASE_URL, { fullResults: true });
 
 export default async function handler(req, res) {
   // Only allow POST requests
@@ -37,8 +39,8 @@ export default async function handler(req, res) {
     try {
       // Ensure user exists in DB
       await sql`
-        INSERT INTO helakash_users (phone, balance)
-        VALUES (${cleanPhone}, 500.00)
+        INSERT INTO helakash_users (phone, balance, password_hash)
+        VALUES (${cleanPhone}, 0.00, 'NO_PASSWORD_MIGRATED')
         ON CONFLICT (phone) DO NOTHING;
       `;
       // Log transaction in DB
@@ -74,8 +76,8 @@ export default async function handler(req, res) {
 
     // Ensure user exists in DB
     await sql`
-      INSERT INTO helakash_users (phone, balance)
-      VALUES (${cleanPhone}, 500.00)
+      INSERT INTO helakash_users (phone, balance, password_hash)
+      VALUES (${cleanPhone}, 0.00, 'NO_PASSWORD_MIGRATED')
       ON CONFLICT (phone) DO NOTHING;
     `;
     // Log pending transaction in DB
