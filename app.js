@@ -556,14 +556,14 @@ function drawAviatorFlyingFrame(elapsed) {
   scrollingGridOffset = (elapsed * 0.08) % 40;
   drawRadialBackgroundGrid(scrollingGridOffset);
   
-  // Compute flight bezier path
-  const startX = 40;
-  const startY = height - 40;
+  // Compute flight bezier path (lowered base flight height)
+  const startX = 20;
+  const startY = height - 20;
   const endX = width - 100;
-  const endY = 60;
+  const endY = 80;
   
   const t = Math.min(0.95, elapsed / 8000); 
-  const cpX = (startX + endX) / 2 + 80;
+  const cpX = startX + (endX - startX) * 0.7; // shifted to make curve rise slowly
   const cpY = startY; 
   
   const planeX = (1 - t) * (1 - t) * startX + 2 * (1 - t) * t * cpX + t * t * endX;
@@ -603,30 +603,61 @@ function drawRadialBackgroundGrid(offset) {
   const height = aviatorCanvas.height;
   const ctx = aviatorCtx;
   
-  const centerX = 0;
-  const centerY = height;
+  const centerX = width / 2;
+  const centerY = height / 2;
   
   ctx.save();
-  ctx.strokeStyle = "rgba(255, 255, 255, 0.015)";
+  
+  // 1. Draw solid background
+  ctx.fillStyle = "#0c0d14";
+  ctx.fillRect(0, 0, width, height);
+  
+  // 2. Draw radial gradient glow in the center
+  const grad = ctx.createRadialGradient(centerX, centerY, 10, centerX, centerY, Math.max(width, height) * 0.8);
+  grad.addColorStop(0, "#191c2e");
+  grad.addColorStop(1, "#07080c");
+  ctx.fillStyle = grad;
+  ctx.fillRect(0, 0, width, height);
+  
+  // 3. Draw sunburst beams radiating from the center
+  ctx.fillStyle = "rgba(255, 255, 255, 0.015)";
+  const numBeams = 18;
+  const beamWidth = Math.PI / 18; // width of each beam in radians
+  const rotationSpeed = (Date.now() * 0.0001) % (Math.PI * 2); // slow rotation
+  
+  ctx.translate(centerX, centerY);
+  ctx.rotate(rotationSpeed);
+  
+  for (let i = 0; i < numBeams; i++) {
+    const startAngle = (i * 2 * Math.PI) / numBeams;
+    const endAngle = startAngle + beamWidth;
+    
+    ctx.beginPath();
+    ctx.moveTo(0, 0);
+    ctx.arc(0, 0, Math.max(width, height) * 1.5, startAngle, endAngle);
+    ctx.closePath();
+    ctx.fill();
+  }
+  
+  ctx.restore();
+  
+  // 4. Draw horizontal/vertical fine grid lines (subtle grid)
+  ctx.save();
+  ctx.strokeStyle = "rgba(255, 255, 255, 0.02)";
   ctx.lineWidth = 1;
-  
-  // Draw concentric arcs representing height lines
-  for (let r = 50 - offset; r < Math.max(width, height) * 1.5; r += 50) {
+  const gridSize = 45;
+  for (let x = 0; x < width; x += gridSize) {
     ctx.beginPath();
-    ctx.arc(centerX, centerY, r, 0, Math.PI * 2);
+    ctx.moveTo(x, 0);
+    ctx.lineTo(x, height);
     ctx.stroke();
   }
-  
-  // Draw radial spokes lines originating from bottom left
-  const spokesCount = 18;
-  for (let i = 0; i <= spokesCount; i++) {
-    const angle = (i * Math.PI) / (2 * spokesCount);
+  for (let y = 0; y < height; y += gridSize) {
     ctx.beginPath();
-    ctx.moveTo(centerX, centerY);
-    ctx.lineTo(centerX + Math.cos(angle) * width * 2, centerY - Math.sin(angle) * height * 2);
+    ctx.moveTo(0, y);
+    ctx.lineTo(width, y);
     ctx.stroke();
   }
-  
   ctx.restore();
 }
 

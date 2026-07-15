@@ -363,11 +363,11 @@ body {
 }
 
 #aviatorMultiplierVal {
-  font-size: 56px;
+  font-size: 72px;
   font-weight: 800;
   color: #fff;
   line-height: 1;
-  text-shadow: 0 0 20px rgba(255, 255, 255, 0.1);
+  text-shadow: 0 0 20px rgba(255, 255, 255, 0.15);
 }
 
 .round-id-stamp {
@@ -516,7 +516,7 @@ body {
 
 /* Big Action bet button */
 .btn-console-action {
-  background-color: #2563eb; /* Blue button matches image */
+  background-color: #2ca91a; /* Green button matches original */
   border: none;
   border-radius: 8px;
   color: var(--text-white);
@@ -527,11 +527,11 @@ body {
   justify-content: center;
   gap: 2px;
   transition: var(--transition);
-  box-shadow: 0 4px 10px rgba(37, 99, 235, 0.2);
+  box-shadow: 0 4px 10px rgba(44, 169, 26, 0.2);
 }
 
 .btn-console-action:hover {
-  background-color: #1d4ed8;
+  background-color: #248c15;
   transform: translateY(-1px);
 }
 
