@@ -52,7 +52,7 @@ export default async function handler(req, res) {
       );
     `;
 
-    return res.status(200).json({ success: true, message: "HelaKash production database tables initialized successfully" });
+    return res.status(200).json({ success: true, message: "PesaKash production database tables initialized successfully" });
   } catch (error) {
     console.error("Database initialization error:", error);
     return res.status(500).json({ error: error.message });
