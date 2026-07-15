@@ -22,10 +22,19 @@ export default async function handler(req, res) {
     cleanPhone = '254' + cleanPhone;
   }
 
-  const username = process.env.PAYHERO_USERNAME;
-  const password = process.env.PAYHERO_PASSWORD;
-  const channelId = process.env.PAYHERO_CHANNEL_ID;
-  const callbackUrl = process.env.PAYHERO_CALLBACK_URL;
+  const cleanEnvVar = (val) => {
+    if (!val) return val;
+    let clean = val.trim();
+    if ((clean.startsWith('"') && clean.endsWith('"')) || (clean.startsWith("'") && clean.endsWith("'"))) {
+      clean = clean.slice(1, -1);
+    }
+    return clean.trim();
+  };
+
+  const username = cleanEnvVar(process.env.PAYHERO_USERNAME);
+  const password = cleanEnvVar(process.env.PAYHERO_PASSWORD);
+  const channelId = cleanEnvVar(process.env.PAYHERO_CHANNEL_ID);
+  const callbackUrl = cleanEnvVar(process.env.PAYHERO_CALLBACK_URL);
 
   // Fallback to SIMULATED mode if credentials are missing
   if (!username || !password || !channelId) {
@@ -97,7 +106,13 @@ export default async function handler(req, res) {
       body: JSON.stringify(payload)
     });
 
-    const data = await response.json();
+    let data;
+    try {
+      data = await response.json();
+    } catch (e) {
+      data = null;
+    }
+
     if (!response.ok) {
       // Mark transaction as failed in DB
       await sql`
@@ -105,7 +120,25 @@ export default async function handler(req, res) {
         SET status = 'FAILED' 
         WHERE reference = ${reference};
       `;
-      return res.status(response.status).json({ error: data.message || 'Pay Hero API Error' });
+      
+      console.error("Pay Hero STK push failure response status:", response.status);
+      console.error("Pay Hero STK push failure data:", data);
+
+      let errorMessage = 'Pay Hero API Error';
+      if (data) {
+        if (typeof data.message === 'string') {
+          errorMessage = data.message;
+        } else if (typeof data.error === 'string') {
+          errorMessage = data.error;
+        } else if (data.errors && typeof data.errors === 'object') {
+          errorMessage = JSON.stringify(data.errors);
+        } else if (typeof data === 'string') {
+          errorMessage = data;
+        } else {
+          errorMessage = JSON.stringify(data);
+        }
+      }
+      return res.status(response.status).json({ error: errorMessage });
     }
 
     return res.status(200).json({
