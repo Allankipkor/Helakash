@@ -12,6 +12,10 @@ export default async function handler(req, res) {
     return res.status(400).json({ error: 'Amount and phone number are required.' });
   }
 
+  if (parseFloat(amount) < 500) {
+    return res.status(400).json({ error: 'Minimum withdrawal amount is KES 500.' });
+  }
+
   let cleanPhone = phone.replace(/\D/g, '');
   if (cleanPhone.startsWith('0')) {
     cleanPhone = '254' + cleanPhone.substring(1);

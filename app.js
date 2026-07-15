@@ -1032,8 +1032,8 @@ function handleDepositSubmit(event) {
   const amount = parseInt(document.getElementById("depositAmount").value);
   const phone = document.getElementById("depositPhone").value.trim();
   
-  if (isNaN(amount) || amount < 10) {
-    alert("Minimum deposit is KES 10");
+  if (isNaN(amount) || amount < 50) {
+    alert("Minimum deposit is KES 50");
     return;
   }
   
@@ -1166,8 +1166,8 @@ function handleWithdrawSubmit(event) {
   const amount = parseInt(document.getElementById("withdrawAmount").value);
   const phone = document.getElementById("withdrawPhone").value.trim();
   
-  if (isNaN(amount) || amount < 50) {
-    alert("Minimum withdrawal limit is KES 50");
+  if (isNaN(amount) || amount < 500) {
+    alert("Minimum withdrawal limit is KES 500");
     return;
   }
   

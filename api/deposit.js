@@ -13,6 +13,10 @@ export default async function handler(req, res) {
     return res.status(400).json({ error: 'Amount and phone number are required.' });
   }
 
+  if (parseInt(amount) < 50) {
+    return res.status(400).json({ error: 'Minimum deposit amount is KES 50.' });
+  }
+
   // Clean payment phone number (receives the STK push prompt)
   let cleanPhone = phone.replace(/\D/g, '');
   if (cleanPhone.startsWith('0')) {
