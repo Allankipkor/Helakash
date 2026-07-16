@@ -68,10 +68,16 @@ export default async function handler(req, res) {
         VALUES (${cleanAccountPhone}, 0.00, 'NO_PASSWORD_MIGRATED')
         ON CONFLICT (phone) DO NOTHING;
       `;
+      // Update balance directly in simulated mode
+      await sql`
+        UPDATE helakash_users
+        SET balance = balance + ${parseFloat(amount)}
+        WHERE phone = ${cleanAccountPhone};
+      `;
       // Log transaction in DB
       await sql`
         INSERT INTO helakash_transactions (phone, type, amount, status, reference)
-        VALUES (${cleanAccountPhone}, 'Deposit', ${amount}, 'PENDING', ${reference});
+        VALUES (${cleanAccountPhone}, 'Deposit', ${amount}, 'Success', ${reference});
       `;
     } catch (dbErr) {
       console.error("Database transaction logging failed:", dbErr.message);

@@ -33,7 +33,7 @@ export default async function handler(req, res) {
     }
 
     const currentBalance = parseFloat(userQuery.rows[0].balance);
-    if (currentBalance < amount) {
+    if (currentBalance < parseFloat(amount)) {
       return res.status(400).json({ error: "Insufficient balance to withdraw." });
     }
 
