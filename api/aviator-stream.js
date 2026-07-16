@@ -85,7 +85,8 @@ export default async function handler(req, res) {
             crash_point_3 = ${nextCp},
             status = 'ACTIVE',
             created_at = NOW()
-        WHERE phone = 'global' AND created_at = ${globalRow.created_at};
+        WHERE phone = 'global'
+          AND EXTRACT(EPOCH FROM (NOW() - created_at)) * 1000 >= ${totalRoundDuration};
       `;
 
       // Re-read updated global round parameters (whether we updated it or a concurrent request did)
