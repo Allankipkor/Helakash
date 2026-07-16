@@ -23,7 +23,10 @@ export default async function handler(req, res) {
   if (type.toLowerCase().includes('aviator win')) {
     try {
       const activeRoundQuery = await sql`
-        SELECT crash_point, status, created_at FROM helakash_active_rounds WHERE phone = ${cleanPhone};
+        SELECT crash_point, status, created_at,
+               EXTRACT(EPOCH FROM (NOW() - created_at)) * 1000 AS elapsed_ms
+        FROM helakash_active_rounds 
+        WHERE phone = ${cleanPhone};
       `;
 
       if (activeRoundQuery.rows.length === 0) {
@@ -43,11 +46,11 @@ export default async function handler(req, res) {
       }
 
       // Time-based validation: ensure the user cashed out BEFORE the plane actually crashed
-      const roundCreatedAt = new Date(row.created_at).getTime();
+      const elapsedTotal = parseFloat(row.elapsed_ms);
       const flightDuration = Math.floor(7500 * Math.pow(clientMultiplier - 1.0, 1 / 1.2));
-      const maxAllowedTime = roundCreatedAt + 7500 + flightDuration + 3500; // 3.5s latency buffer
+      const maxAllowedTime = 7500 + flightDuration + 3500; // 3.5s latency buffer
 
-      if (Date.now() > maxAllowedTime) {
+      if (elapsedTotal > maxAllowedTime) {
         return res.status(400).json({ error: "Cashout request timed out (round already ended)." });
       }
 

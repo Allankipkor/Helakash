@@ -38,7 +38,10 @@ export default async function handler(req, res) {
   try {
     // 1. Fetch global active round
     let globalQuery = await sql`
-      SELECT crash_point, crash_point_2, crash_point_3, created_at FROM helakash_active_rounds WHERE phone = 'global';
+      SELECT crash_point, crash_point_2, crash_point_3, created_at,
+             EXTRACT(EPOCH FROM (NOW() - created_at)) * 1000 AS elapsed_ms
+      FROM helakash_active_rounds 
+      WHERE phone = 'global';
     `;
 
     if (globalQuery.rows.length === 0) {
@@ -51,7 +54,10 @@ export default async function handler(req, res) {
         VALUES ('global', ${crashPoint}, ${crashPoint2}, ${crashPoint3}, 'ACTIVE', NOW());
       `;
       globalQuery = await sql`
-        SELECT crash_point, crash_point_2, crash_point_3, created_at FROM helakash_active_rounds WHERE phone = 'global';
+        SELECT crash_point, crash_point_2, crash_point_3, created_at,
+               EXTRACT(EPOCH FROM (NOW() - created_at)) * 1000 AS elapsed_ms
+        FROM helakash_active_rounds 
+        WHERE phone = 'global';
       `;
     }
 
@@ -59,7 +65,7 @@ export default async function handler(req, res) {
     crashPoint = parseFloat(globalRow.crash_point);
     crashPoint2 = parseFloat(globalRow.crash_point_2);
     crashPoint3 = parseFloat(globalRow.crash_point_3);
-    globalCreatedAt = new Date(globalRow.created_at).getTime();
+    const elapsedMs = parseFloat(globalRow.elapsed_ms);
 
     // 2. Solve duration limits for the current global round
     const flightDurationLimit = Math.floor(7500 * Math.pow(crashPoint - 1.0, 1 / 1.2));
@@ -67,7 +73,7 @@ export default async function handler(req, res) {
     const postCrashDuration = 3000;
     const totalRoundDuration = countdownDuration + flightDurationLimit + postCrashDuration;
 
-    let elapsedTotal = Date.now() - globalCreatedAt;
+    let elapsedTotal = elapsedMs;
 
     // 3. Shift the global round if it has expired
     if (elapsedTotal >= totalRoundDuration) {
@@ -84,26 +90,30 @@ export default async function handler(req, res) {
 
       // Re-read updated global round parameters (whether we updated it or a concurrent request did)
       const reQuery = await sql`
-        SELECT crash_point, crash_point_2, crash_point_3, created_at FROM helakash_active_rounds WHERE phone = 'global';
+        SELECT crash_point, crash_point_2, crash_point_3, created_at,
+               EXTRACT(EPOCH FROM (NOW() - created_at)) * 1000 AS elapsed_ms
+        FROM helakash_active_rounds 
+        WHERE phone = 'global';
       `;
       globalRow = reQuery.rows[0];
       crashPoint = parseFloat(globalRow.crash_point);
       crashPoint2 = parseFloat(globalRow.crash_point_2);
       crashPoint3 = parseFloat(globalRow.crash_point_3);
-      globalCreatedAt = new Date(globalRow.created_at).getTime();
-      elapsedTotal = Date.now() - globalCreatedAt;
+      globalCreatedAt = Date.now() - parseFloat(globalRow.elapsed_ms);
+    } else {
+      globalCreatedAt = Date.now() - elapsedTotal;
     }
 
     // 4. Align individual user active round status in database
     await sql`
       INSERT INTO helakash_active_rounds (phone, crash_point, crash_point_2, crash_point_3, status, created_at)
-      VALUES (${cleanPhone}, ${crashPoint}, ${crashPoint2}, ${crashPoint3}, 'ACTIVE', ${new Date(globalCreatedAt)})
+      VALUES (${cleanPhone}, ${crashPoint}, ${crashPoint2}, ${crashPoint3}, 'ACTIVE', ${globalRow.created_at})
       ON CONFLICT (phone) DO UPDATE 
       SET crash_point = ${crashPoint},
           crash_point_2 = ${crashPoint2},
           crash_point_3 = ${crashPoint3},
           status = 'ACTIVE',
-          created_at = ${new Date(globalCreatedAt)};
+          created_at = ${globalRow.created_at};
     `;
 
   } catch (dbError) {
