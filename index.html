@@ -573,6 +573,56 @@
     </div>
   </div>
 
+  <!-- SUCCESSFUL WITHDRAWAL MODAL -->
+  <div class="modal-overlay" id="withdrawSuccessModal">
+    <div class="modal-content" style="max-width: 380px; background: #0c1514; border: 1px solid rgba(16, 185, 129, 0.2); border-radius: 20px; padding: 24px; box-shadow: 0 20px 40px rgba(0,0,0,0.7); position: relative; color: #fff;">
+      <button type="button" class="btn-drawer-close" onclick="closeWithdrawSuccessModal()" style="position: absolute; top: 16px; right: 16px; background: transparent; border: none; color: rgba(255,255,255,0.4); font-size: 24px; cursor: pointer; line-height: 1; outline: none;">&times;</button>
+      
+      <!-- Top Green Animated Circle Icon -->
+      <div style="display: flex; justify-content: center; margin-top: 12px; margin-bottom: 20px;">
+        <div class="success-icon-glow" style="width: 72px; height: 72px; background: rgba(16, 185, 129, 0.08); border-radius: 50%; display: flex; align-items: center; justify-content: center; border: 1px solid rgba(16, 185, 129, 0.2); animation: pulse-glow 2s infinite;">
+          <div style="width: 48px; height: 48px; background: rgba(16, 185, 129, 0.15); border-radius: 50%; display: flex; align-items: center; justify-content: center;">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#10b981" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
+              <polyline points="20 6 9 17 4 12"></polyline>
+            </svg>
+          </div>
+        </div>
+      </div>
+
+      <div style="text-align: center; margin-bottom: 24px;">
+        <span style="font-size: 11px; text-transform: uppercase; font-weight: 700; letter-spacing: 0.1em; color: #10b981; display: block; margin-bottom: 6px;">Withdrawal Requested</span>
+        <strong id="withdrawSuccessAmount" style="font-size: 36px; font-weight: 800; font-family: 'Outfit', sans-serif; color: #fff; display: block;">KES 0.00</strong>
+      </div>
+
+      <!-- Info Block 1 (Processing Time) -->
+      <div style="background: rgba(255, 255, 255, 0.02); border: 1px solid rgba(255, 255, 255, 0.05); border-radius: 12px; padding: 14px 16px; display: flex; align-items: center; gap: 14px; margin-bottom: 12px;">
+        <div style="width: 36px; height: 36px; background: rgba(245, 158, 11, 0.1); border-radius: 50%; display: flex; align-items: center; justify-content: center; flex-shrink: 0;">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#f59e0b" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="12" cy="12" r="10"></circle>
+            <polyline points="12 6 12 12 16 14"></polyline>
+          </svg>
+        </div>
+        <div style="text-align: left;">
+          <span style="font-size: 11px; color: var(--text-gray); display: block; margin-bottom: 2px;">Average Processing Time</span>
+          <span style="font-size: 13px; font-weight: 700; color: #fff; display: block;">Instant to 2 mins</span>
+        </div>
+      </div>
+
+      <!-- Info Block 2 (Status Notification) -->
+      <div style="background: rgba(16, 185, 129, 0.04); border: 1px solid rgba(16, 185, 129, 0.1); border-radius: 12px; padding: 14px 16px; display: flex; align-items: center; gap: 14px; margin-bottom: 24px;">
+        <div style="width: 20px; height: 20px; background: rgba(16, 185, 129, 0.15); border-radius: 50%; display: flex; align-items: center; justify-content: center; flex-shrink: 0;">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#10b981" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
+            <polyline points="20 6 9 17 4 12"></polyline>
+          </svg>
+        </div>
+        <span style="font-size: 13px; color: rgba(255, 255, 255, 0.9); font-weight: 500; text-align: left;">Your withdrawal is being processed.</span>
+      </div>
+
+      <!-- Done Button -->
+      <button type="button" class="btn-primary" onclick="closeWithdrawSuccessModal()" style="width: 100%; border-radius: 12px; padding: 14px; background: #10b981; border: none; font-size: 15px; font-weight: 700; color: #fff; cursor: pointer; transition: all 0.2s; box-shadow: 0 4px 12px rgba(16, 185, 129, 0.25); outline: none;">Done</button>
+    </div>
+  </div>
+
   <script src="app.js?v=2.0.5"></script>
 </body>
 </html>

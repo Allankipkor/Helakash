@@ -1245,18 +1245,36 @@ function handleWithdrawSubmit(event) {
       saveBalance();
       updateBalanceUI();
       syncWithDatabase();
-      alert(`💸 WITHDRAWAL REQUEST SUBMITTED! KES ${amount} is being processed. Updates will reflect in history shortly.`);
+      showWithdrawSuccessModal(amount);
     }
   })
   .catch(err => {
     console.error("Withdrawal error:", err);
     // Offline fallback
     addTransaction(`Withdraw`, -amount, 'Completed');
-    alert(`💸 WITHDRAWAL SUBMITTED (offline mode)! KES ${amount} is being processed.`);
+    showWithdrawSuccessModal(amount);
   });
   
   document.getElementById("withdrawAmount").value = '';
   document.getElementById("withdrawPhone").value = '';
+}
+
+function showWithdrawSuccessModal(amount) {
+  const modalAmount = document.getElementById("withdrawSuccessAmount");
+  if (modalAmount) {
+    modalAmount.textContent = `KES ${parseFloat(amount).toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}`;
+  }
+  const modal = document.getElementById("withdrawSuccessModal");
+  if (modal) {
+    modal.classList.add("active");
+  }
+}
+
+function closeWithdrawSuccessModal() {
+  const modal = document.getElementById("withdrawSuccessModal");
+  if (modal) {
+    modal.classList.remove("active");
+  }
 }
 
 
