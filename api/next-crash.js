@@ -25,7 +25,7 @@ export default async function handler(req, res) {
 
   try {
     const result = await sql`
-      SELECT crash_point, crash_point_2, crash_point_3 FROM helakash_active_rounds WHERE phone = ${cleanPhone};
+      SELECT crash_point, crash_point_2, crash_point_3 FROM helakash_active_rounds WHERE phone = 'global';
     `;
 
     if (result.rows.length === 0) {

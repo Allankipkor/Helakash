@@ -424,7 +424,7 @@ function resetAviatorRound() {
     
     if (aviatorState !== 'running') {
       aviatorState = 'running';
-      flightStartTime = Date.now();
+      flightStartTime = Date.now() - (data.elapsed || 0);
       particleList = [];
       
       lockConsoleForTakeoff('A', activeBetA);

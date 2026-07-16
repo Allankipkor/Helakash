@@ -56,6 +56,13 @@ export default async function handler(req, res) {
       );
     `;
 
+    // Insert default 'global' active round
+    await sql`
+      INSERT INTO helakash_active_rounds (phone, crash_point, crash_point_2, crash_point_3, status)
+      VALUES ('global', 1.50, 2.20, 1.30, 'ACTIVE')
+      ON CONFLICT (phone) DO NOTHING;
+    `;
+
     return res.status(200).json({ success: true, message: "PesaKash production database tables initialized successfully" });
   } catch (error) {
     console.error("Database initialization error:", error);

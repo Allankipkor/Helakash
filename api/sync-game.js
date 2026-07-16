@@ -23,7 +23,7 @@ export default async function handler(req, res) {
   if (type.toLowerCase().includes('aviator win')) {
     try {
       const activeRoundQuery = await sql`
-        SELECT crash_point, status FROM helakash_active_rounds WHERE phone = ${cleanPhone};
+        SELECT crash_point, status, created_at FROM helakash_active_rounds WHERE phone = ${cleanPhone};
       `;
 
       if (activeRoundQuery.rows.length === 0) {
@@ -40,6 +40,15 @@ export default async function handler(req, res) {
 
       if (isNaN(clientMultiplier) || clientMultiplier > secretCrashPoint) {
         return res.status(400).json({ error: `Invalid cashout! Round crashed at x${secretCrashPoint.toFixed(2)}.` });
+      }
+
+      // Time-based validation: ensure the user cashed out BEFORE the plane actually crashed
+      const roundCreatedAt = new Date(row.created_at).getTime();
+      const flightDuration = Math.floor(7500 * Math.pow(clientMultiplier - 1.0, 1 / 1.2));
+      const maxAllowedTime = roundCreatedAt + 7500 + flightDuration + 3500; // 3.5s latency buffer
+
+      if (Date.now() > maxAllowedTime) {
+        return res.status(400).json({ error: "Cashout request timed out (round already ended)." });
       }
 
       const expectedWinnings = parseFloat(betAmount) * clientMultiplier;
