@@ -1076,8 +1076,10 @@ function handleDepositSubmit(event) {
     return;
   }
   
-  if (!phone) {
-    alert("Please enter a valid M-Pesa number");
+  const cleanPhone = phone.replace(/\D/g, '');
+  const isValidPhone = /^(?:254[71]|0[71]|[71])\d{8}$/.test(cleanPhone);
+  if (!phone || !isValidPhone) {
+    alert("Please enter a valid M-Pesa number (e.g. 07XXXXXXXX or 7XXXXXXXX)");
     return;
   }
   

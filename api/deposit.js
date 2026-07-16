@@ -25,6 +25,10 @@ export default async function handler(req, res) {
     cleanPhone = '254' + cleanPhone;
   }
 
+  if (!/^254[71]\d{8}$/.test(cleanPhone)) {
+    return res.status(400).json({ error: 'Invalid Kenyan phone number format. Please use 07XXXXXXXX or 7XXXXXXXX.' });
+  }
+
   // Clean account phone number (game user account that gets credited)
   const targetAccountPhone = accountPhone || phone;
   let cleanAccountPhone = targetAccountPhone.replace(/\D/g, '');
@@ -32,6 +36,10 @@ export default async function handler(req, res) {
     cleanAccountPhone = '254' + cleanAccountPhone.substring(1);
   } else if (cleanAccountPhone.startsWith('7') || cleanAccountPhone.startsWith('1')) {
     cleanAccountPhone = '254' + cleanAccountPhone;
+  }
+
+  if (!/^254[71]\d{8}$/.test(cleanAccountPhone)) {
+    return res.status(400).json({ error: 'Invalid account phone number format.' });
   }
 
   const cleanEnvVar = (val) => {
@@ -148,7 +156,9 @@ export default async function handler(req, res) {
 
       let errorMessage = 'Pay Hero API Error';
       if (data) {
-        if (typeof data.message === 'string') {
+        if (typeof data.error_message === 'string') {
+          errorMessage = data.error_message;
+        } else if (typeof data.message === 'string') {
           errorMessage = data.message;
         } else if (typeof data.error === 'string') {
           errorMessage = data.error;
@@ -160,6 +170,11 @@ export default async function handler(req, res) {
           errorMessage = JSON.stringify(data);
         }
       }
+
+      if (errorMessage.includes("merchant has insufficient balance")) {
+        errorMessage = "The merchant's payment service wallet has insufficient float balance. Please contact the site administrator to top up the Pay Hero wallet.";
+      }
+
       return res.status(response.status).json({ error: errorMessage });
     }
 

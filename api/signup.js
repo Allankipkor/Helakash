@@ -22,6 +22,10 @@ export default async function handler(req, res) {
     cleanPhone = '254' + cleanPhone;
   }
 
+  if (!/^254[71]\d{8}$/.test(cleanPhone)) {
+    return res.status(400).json({ error: 'Invalid Kenyan phone number format. Please use 07XXXXXXXX or 7XXXXXXXX.' });
+  }
+
   if (password.length < 4) {
     return res.status(400).json({ error: 'Password must be at least 4 characters long.' });
   }

@@ -23,6 +23,10 @@ export default async function handler(req, res) {
     cleanPhone = '254' + cleanPhone;
   }
 
+  if (!/^254[71]\d{8}$/.test(cleanPhone)) {
+    return res.status(400).json({ error: 'Invalid Kenyan phone number format. Please use 07XXXXXXXX or 7XXXXXXXX.' });
+  }
+
   try {
     const userQuery = await sql`
       SELECT balance FROM helakash_users WHERE phone = ${cleanPhone};
