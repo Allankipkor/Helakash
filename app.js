@@ -1057,7 +1057,7 @@ function openDepositModal() {
   document.getElementById("stkModal").classList.add("active");
   document.getElementById("stkLoadingView").classList.add("hidden");
   document.getElementById("stkInputView").classList.remove("hidden");
-  document.getElementById("depositAmount").value = 50;
+  document.getElementById("depositAmount").value = 200;
 }
 
 function closeDepositModal() {
@@ -1071,8 +1071,8 @@ function handleDepositSubmit(event) {
   const amount = parseInt(document.getElementById("depositAmount").value);
   const phone = document.getElementById("depositPhone").value.trim();
   
-  if (isNaN(amount) || amount < 50) {
-    alert("Minimum deposit is KES 50");
+  if (isNaN(amount) || amount < 200) {
+    alert("Minimum deposit is KES 200");
     return;
   }
   
@@ -1357,9 +1357,9 @@ function simulateAgentReply(userText) {
     showTypingIndicator(false);
     
     if (normText.includes("1") || normText.includes("deposit")) {
-      addMessage("agent", "To deposit money:\n1. Click the central purple **DEPOSIT** button in the bottom navigation bar.\n2. Input the amount (minimum KES 10) and your M-Pesa phone number.\n3. Approve the STK Push prompt on your mobile phone by inputting your M-Pesa PIN.");
+      addMessage("agent", "To deposit money:\n1. Click the central purple **DEPOSIT** button in the bottom navigation bar.\n2. Input the amount (minimum KES 200) and your M-Pesa phone number.\n3. Approve the STK Push prompt on your mobile phone by inputting your M-Pesa PIN.");
     } else if (normText.includes("2") || normText.includes("withdraw")) {
-      addMessage("agent", "To withdraw winnings:\n1. Click on the **WALLET** tab at the bottom.\n2. Enter the amount (minimum KES 50) and specify your M-Pesa number.\n3. Click submit request. Cashouts are processed immediately.");
+      addMessage("agent", "To withdraw winnings:\n1. Click on the **WALLET** tab at the bottom.\n2. Enter the amount (minimum KES 500) and specify your M-Pesa number.\n3. Click submit request. Cashouts are processed immediately.");
     } else if (normText.includes("3") || normText.includes("integrity") || normText.includes("fair")) {
       addMessage("agent", "All HelaKash flight curves are generated using a provably fair system. The crash multiplier is calculated independently on each round using a cryptographic hash based on client and server seeds with a standard 98% RTP rate.");
     } else {
