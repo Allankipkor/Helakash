@@ -381,7 +381,7 @@ function resetAviatorRound() {
   // Set UI Status HUD
   document.getElementById("aviatorStatusText").textContent = "Waiting for next round";
   document.getElementById("aviatorStatusText").style.color = "var(--text-gray)";
-  document.getElementById("aviatorMultiplierVal").textContent = "1.00x";
+  document.getElementById("aviatorMultiplierVal").textContent = "1.00";
   document.getElementById("aviatorMultiplierVal").style.color = "#fff";
   
   // Reset Console A Button
@@ -525,7 +525,7 @@ function tickFlyingRound() {
   aviatorMultiplier = currentMult;
   
   // Update multiplier center value
-  document.getElementById("aviatorMultiplierVal").textContent = currentMult.toFixed(2) + "x";
+  document.getElementById("aviatorMultiplierVal").textContent = currentMult.toFixed(2);
   
   // Check Auto Cashouts
   if (activeBetA && autoCashoutActiveA && currentMult >= autoCashoutValA) {
