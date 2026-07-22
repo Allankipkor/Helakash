@@ -1053,16 +1053,168 @@ function resetMinesBoardUI() {
 // ==========================================================================
 let stkTimerInterval;
 
-function openDepositModal() {
+function openDepositModal(defaultMethod = 'mpesa') {
   document.getElementById("stkModal").classList.add("active");
   document.getElementById("stkLoadingView").classList.add("hidden");
-  document.getElementById("stkInputView").classList.remove("hidden");
+  document.getElementById("paystackLoadingView").classList.add("hidden");
   document.getElementById("depositAmount").value = 200;
+  document.getElementById("paystackDepositAmount").value = 200;
+  
+  // Show tab selection header
+  document.getElementById("depositTabHeader").style.display = "flex";
+  
+  setDepositMethod(defaultMethod);
+}
+
+function setDepositMethod(method) {
+  const mpesaTab = document.getElementById("tabBtnMpesa");
+  const paystackTab = document.getElementById("tabBtnPaystack");
+  const mpesaView = document.getElementById("stkInputView");
+  const paystackView = document.getElementById("paystackInputView");
+  
+  if (method === 'mpesa') {
+    mpesaTab.classList.add("active");
+    paystackTab.classList.remove("active");
+    mpesaView.classList.remove("hidden");
+    paystackView.classList.add("hidden");
+  } else {
+    mpesaTab.classList.remove("active");
+    paystackTab.classList.add("active");
+    mpesaView.classList.add("hidden");
+    paystackView.classList.remove("hidden");
+  }
 }
 
 function closeDepositModal() {
   document.getElementById("stkModal").classList.remove("active");
   clearInterval(stkTimerInterval);
+}
+
+let pendingPaystackRef = null;
+
+function handlePaystackDepositSubmit(event) {
+  event.preventDefault();
+  
+  const amount = parseInt(document.getElementById("paystackDepositAmount").value);
+  if (isNaN(amount) || amount < 200) {
+    alert("Minimum deposit is KES 200");
+    return;
+  }
+  
+  const phone = localStorage.getItem("helakash_user");
+  if (!phone) {
+    alert("Please sign in to make a deposit");
+    return;
+  }
+  
+  document.getElementById("depositTabHeader").style.display = "none";
+  document.getElementById("paystackInputView").classList.add("hidden");
+  document.getElementById("paystackLoadingView").classList.remove("hidden");
+  
+  fetch("/api/paystack-init", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      amount,
+      phone,
+      accountPhone: phone
+    })
+  })
+  .then(res => res.json())
+  .then(data => {
+    if (!data.success) {
+      alert(`Initialization failed: ${data.error || 'Unknown Error'}`);
+      closeDepositModal();
+    } else {
+      pendingPaystackRef = data.reference;
+      
+      if (data.simulated) {
+        // Open local sandbox modal
+        document.getElementById("stkModal").classList.remove("active");
+        document.getElementById("simPaystackAmount").textContent = `KES ${amount.toFixed(2)}`;
+        document.getElementById("simPaystackEmail").textContent = data.email;
+        document.getElementById("simulatedPaystackModal").classList.add("active");
+      } else {
+        // Run real Paystack inline SDK
+        let handler = PaystackPop.setup({
+          key: data.key,
+          email: data.email,
+          amount: amount * 100, // in cents/kobo
+          currency: 'KES',
+          ref: data.reference,
+          callback: function(response) {
+            console.log("Paystack payment success:", response);
+            verifyPaystackDeposit(response.reference);
+          },
+          onClose: function() {
+            alert("Payment cancelled or closed.");
+            closeDepositModal();
+          }
+        });
+        handler.openIframe();
+      }
+    }
+  })
+  .catch(err => {
+    console.error("Paystack init request error:", err);
+    alert("An error occurred during payment initialization.");
+    closeDepositModal();
+  });
+}
+
+function verifyPaystackDeposit(reference, simulateStatus = null) {
+  document.getElementById("stkModal").classList.add("active");
+  document.getElementById("depositTabHeader").style.display = "none";
+  document.getElementById("stkInputView").classList.add("hidden");
+  document.getElementById("paystackInputView").classList.add("hidden");
+  document.getElementById("stkLoadingView").classList.add("hidden");
+  document.getElementById("paystackLoadingView").classList.remove("hidden");
+  document.getElementById("paystackLoadingView").querySelector("h3").textContent = "Verifying Payment...";
+  
+  const body = { reference };
+  if (simulateStatus) {
+    body.status = simulateStatus;
+  }
+  
+  fetch("/api/paystack-verify", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body)
+  })
+  .then(res => res.json())
+  .then(data => {
+    if (data.success) {
+      userBalance = data.balance;
+      transactions = data.transactions;
+      saveBalance();
+      saveTransactions();
+      updateBalanceUI();
+      renderTransactionHistory();
+      alert(`✅ DEPOSIT SUCCESSFUL! Your wallet balance has been updated.`);
+      closeDepositModal();
+    } else {
+      alert(`❌ Payment verification failed: ${data.error || 'Validation error'}`);
+      closeDepositModal();
+    }
+  })
+  .catch(err => {
+    console.error("Paystack verification error:", err);
+    alert("⚠️ Connection error during payment verification. Please check your transaction history shortly.");
+    closeDepositModal();
+  });
+}
+
+function simulatePaystackPayment(status) {
+  document.getElementById("simulatedPaystackModal").classList.remove("active");
+  if (status === 'success') {
+    verifyPaystackDeposit(pendingPaystackRef, 'success');
+  } else {
+    verifyPaystackDeposit(pendingPaystackRef, 'failed');
+  }
+}
+
+function closeSimulatedPaystackModal() {
+  document.getElementById("simulatedPaystackModal").classList.remove("active");
 }
 
 function handleDepositSubmit(event) {

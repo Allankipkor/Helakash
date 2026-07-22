@@ -838,6 +838,16 @@ body {
   transform: translateY(-1px);
 }
 
+.btn-submit-paystack {
+  background: linear-gradient(135deg, #09a5db, #059669);
+  color: #fff;
+  box-shadow: 0 4px 10px rgba(9, 165, 219, 0.2);
+}
+
+.btn-submit-paystack:hover {
+  transform: translateY(-1px);
+}
+
 .btn-submit-withdraw {
   background: linear-gradient(135deg, var(--secondary), #6d28d9);
   color: #fff;
@@ -1601,5 +1611,35 @@ body {
     box-shadow: 0 0 0 0 rgba(16, 185, 129, 0);
   }
 }
+
+/* Paystack Payment Tabs Styling */
+.payment-tab {
+  background: rgba(255, 255, 255, 0.02);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  color: var(--text-gray);
+  transition: all 0.2s ease;
+}
+
+.payment-tab:hover {
+  background: rgba(255, 255, 255, 0.05);
+  color: #fff;
+}
+
+.payment-tab.active {
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  color: #fff;
+}
+
+#tabBtnMpesa.active {
+  border-bottom: 2px solid var(--success) !important;
+  color: var(--success);
+}
+
+#tabBtnPaystack.active {
+  border-bottom: 2px solid #09a5db !important;
+  color: #09a5db;
+}
+
 
 
