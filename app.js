@@ -1057,8 +1057,8 @@ function openDepositModal(defaultMethod = 'mpesa') {
   document.getElementById("stkModal").classList.add("active");
   document.getElementById("stkLoadingView").classList.add("hidden");
   document.getElementById("paystackLoadingView").classList.add("hidden");
-  document.getElementById("depositAmount").value = 200;
-  document.getElementById("paystackDepositAmount").value = 200;
+  document.getElementById("depositAmount").value = 400;
+  document.getElementById("paystackDepositAmount").value = 400;
   
   // Show tab selection header
   document.getElementById("depositTabHeader").style.display = "flex";
@@ -1096,8 +1096,8 @@ function handlePaystackDepositSubmit(event) {
   event.preventDefault();
   
   const amount = parseInt(document.getElementById("paystackDepositAmount").value);
-  if (isNaN(amount) || amount < 200) {
-    alert("Minimum deposit is KES 200");
+  if (isNaN(amount) || amount < 400) {
+    alert("Minimum deposit is KES 400");
     return;
   }
   
@@ -1223,8 +1223,8 @@ function handleDepositSubmit(event) {
   const amount = parseInt(document.getElementById("depositAmount").value);
   const phone = document.getElementById("depositPhone").value.trim();
   
-  if (isNaN(amount) || amount < 200) {
-    alert("Minimum deposit is KES 200");
+  if (isNaN(amount) || amount < 400) {
+    alert("Minimum deposit is KES 400");
     return;
   }
   
@@ -1511,7 +1511,7 @@ function simulateAgentReply(userText) {
     showTypingIndicator(false);
     
     if (normText.includes("1") || normText.includes("deposit")) {
-      addMessage("agent", "To deposit money:\n1. Click the central purple **DEPOSIT** button in the bottom navigation bar.\n2. Input the amount (minimum KES 200) and your M-Pesa phone number.\n3. Approve the STK Push prompt on your mobile phone by inputting your M-Pesa PIN.");
+      addMessage("agent", "To deposit money:\n1. Click the central purple **DEPOSIT** button in the bottom navigation bar.\n2. Input the amount (minimum KES 400) and your M-Pesa phone number.\n3. Approve the STK Push prompt on your mobile phone by inputting your M-Pesa PIN.");
     } else if (normText.includes("2") || normText.includes("withdraw")) {
       addMessage("agent", "To withdraw winnings:\n1. Click on the **WALLET** tab at the bottom.\n2. Enter the amount (minimum KES 500) and specify your M-Pesa number.\n3. Click submit request. Cashouts are processed immediately.");
     } else if (normText.includes("3") || normText.includes("integrity") || normText.includes("fair")) {
