@@ -1053,7 +1053,7 @@ function resetMinesBoardUI() {
 // ==========================================================================
 let stkTimerInterval;
 
-function openDepositModal(defaultMethod = 'paystack') {
+function openDepositModal(defaultMethod = 'mpesa') {
   document.getElementById("stkModal").classList.add("active");
   document.getElementById("stkLoadingView").classList.add("hidden");
   document.getElementById("paystackLoadingView").classList.add("hidden");

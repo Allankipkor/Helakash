@@ -263,11 +263,11 @@
               <span>Account Wallet Balance</span>
               <h2 id="walletBalanceVal">KES 500.00</h2>
             </div>
-            <button class="btn-submit-wallet btn-submit-deposit" style="margin-bottom: 12px; font-size: 15px; font-weight: 700; padding: 16px; opacity: 0.4; cursor: not-allowed;" disabled>
-              ⚡ DEPOSIT VIA M-PESA STK PUSH (Unavailable)
+            <button class="btn-submit-wallet btn-submit-deposit" onclick="openDepositModal('mpesa')" style="margin-bottom: 12px; font-size: 15px; font-weight: 700; padding: 16px;">
+              ⚡ DEPOSIT VIA M-PESA STK PUSH
             </button>
-            <button class="btn-submit-wallet btn-submit-paystack" onclick="openDepositModal('paystack')" style="margin-bottom: 24px; font-size: 15px; font-weight: 700; padding: 16px;">
-              💳 DEPOSIT VIA CARD / PAYSTACK
+            <button class="btn-submit-wallet btn-submit-paystack" style="margin-bottom: 24px; font-size: 15px; font-weight: 700; padding: 16px; opacity: 0.4; cursor: not-allowed;" disabled>
+              💳 DEPOSIT VIA CARD / PAYSTACK (Unavailable)
             </button>
             
             <form id="withdrawForm" onsubmit="handleWithdrawSubmit(event)">
@@ -381,16 +381,16 @@
       
       <!-- Payment Tab Header -->
       <div id="depositTabHeader" class="payment-tabs-header" style="display: flex; gap: 8px; margin-bottom: 20px; border-bottom: 1px solid rgba(255,255,255,0.08); padding-bottom: 12px;">
-        <button class="payment-tab" id="tabBtnMpesa" style="flex: 1; padding: 10px; font-weight: 700; font-size: 13px; border-radius: 8px; cursor: not-allowed; opacity: 0.4; transition: all 0.2s;" disabled>
+        <button class="payment-tab active" id="tabBtnMpesa" onclick="setDepositMethod('mpesa')" style="flex: 1; padding: 10px; font-weight: 700; font-size: 13px; border-radius: 8px; cursor: pointer; transition: all 0.2s;">
           ⚡ M-Pesa STK
         </button>
-        <button class="payment-tab active" id="tabBtnPaystack" onclick="setDepositMethod('paystack')" style="flex: 1; padding: 10px; font-weight: 700; font-size: 13px; border-radius: 8px; cursor: pointer; transition: all 0.2s;">
+        <button class="payment-tab" id="tabBtnPaystack" style="flex: 1; padding: 10px; font-weight: 700; font-size: 13px; border-radius: 8px; cursor: not-allowed; opacity: 0.4; transition: all 0.2s;" disabled>
           💳 Card / Paystack
         </button>
       </div>
 
       <!-- M-Pesa Input View -->
-      <div id="stkInputView" class="hidden">
+      <div id="stkInputView">
         <h3 class="modal-title">Deposit via M-Pesa</h3>
         <p class="stk-desc" style="text-align: center; margin-bottom: 20px;">Enter your details to initiate an M-Pesa STK PIN prompt on your phone.</p>
         
@@ -418,7 +418,7 @@
       </div>
 
       <!-- Paystack Input View -->
-      <div id="paystackInputView">
+      <div id="paystackInputView" class="hidden">
         <h3 class="modal-title">Deposit via Paystack</h3>
         <p class="stk-desc" style="text-align: center; margin-bottom: 20px;">Deposit instantly using credit/debit card, bank transfer, or mobile money.</p>
         

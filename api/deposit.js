@@ -60,9 +60,9 @@ export default async function handler(req, res) {
     callbackUrl = `${protocol}://${req.headers.host}/api/callback`;
   }
 
-  // Always run in SIMULATED mode as the PayHero deposit button is hardcoded
-  if (true) {
-    console.log("Pay Hero API running in hardcoded SIMULATED mode.");
+  // Fallback to SIMULATED mode if credentials are missing
+  if (!username || !password || !channelId) {
+    console.log("Pay Hero API credentials not configured. Running in SIMULATED mode.");
     
     // Simulate network delay
     await new Promise(resolve => setTimeout(resolve, 1000));
