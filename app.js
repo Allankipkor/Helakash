@@ -9,13 +9,13 @@ let activeMainTab = 'game'; // 'game', 'mines', 'wallet', 'chat'
 let activeBetConsoleTab = 'selector'; // 'selector', 'ai'
 
 // Console A State
-let betAmountA = 10;
+let betAmountA = 400;
 let autoCashoutActiveA = false;
 let autoCashoutValA = 1.20;
 let activeBetA = false;
 
 // Console B State
-let betAmountB = 10;
+let betAmountB = 400;
 let autoCashoutActiveB = false;
 let autoCashoutValB = 1.20;
 let activeBetB = false;
@@ -304,13 +304,13 @@ function setupConsoleInputs() {
   const amountB = document.getElementById("betAmountB");
   
   amountA?.addEventListener("change", () => {
-    betAmountA = Math.max(10, parseInt(amountA.value) || 10);
+    betAmountA = Math.max(400, parseInt(amountA.value) || 400);
     amountA.value = betAmountA;
     updateConsoleButtonLabel('A');
   });
   
   amountB?.addEventListener("change", () => {
-    betAmountB = Math.max(10, parseInt(amountB.value) || 10);
+    betAmountB = Math.max(400, parseInt(amountB.value) || 400);
     amountB.value = betAmountB;
     updateConsoleButtonLabel('B');
   });
@@ -320,11 +320,11 @@ function adjustConsoleBet(consoleId, offset) {
   if (aviatorState !== 'waiting') return; // Lock adjustments during flight
   
   if (consoleId === 'A') {
-    betAmountA = Math.max(10, betAmountA + offset);
+    betAmountA = Math.max(400, betAmountA + offset);
     document.getElementById("betAmountA").value = betAmountA;
     updateConsoleButtonLabel('A');
   } else {
-    betAmountB = Math.max(10, betAmountB + offset);
+    betAmountB = Math.max(400, betAmountB + offset);
     document.getElementById("betAmountB").value = betAmountB;
     updateConsoleButtonLabel('B');
   }
@@ -920,8 +920,8 @@ function startMinesGame() {
   const betAmount = parseInt(betInput.value);
   const selectVal = parseInt(document.getElementById("mineCountSelect").value);
   
-  if (isNaN(betAmount) || betAmount < 10) {
-    alert("Minimum bet is KES 10");
+  if (isNaN(betAmount) || betAmount < 400) {
+    alert("Minimum bet is KES 400");
     return;
   }
   
@@ -1545,11 +1545,11 @@ function triggerSimulatedWinner() {
   let multiplier = 0;
   
   if (game === 'Aviator') {
-    const bet = [50, 100, 200, 500][Math.floor(Math.random() * 4)];
+    const bet = [400, 500, 1000, 2000][Math.floor(Math.random() * 4)];
     multiplier = 1.1 + Math.pow(Math.random() * 3, 2.5);
     profit = bet * multiplier;
   } else {
-    const bet = [20, 50, 100, 250][Math.floor(Math.random() * 4)];
+    const bet = [400, 500, 1000, 2000][Math.floor(Math.random() * 4)];
     multiplier = 1.2 + Math.random() * 4.5;
     profit = bet * multiplier;
   }
