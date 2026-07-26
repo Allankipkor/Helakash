@@ -21,7 +21,7 @@ if (fs.existsSync('.env')) {
   }
 }
 
-const PORT = 3000;
+const PORT = process.env.PORT || 3005;
 
 // Helper to determine content type
 const MIME_TYPES = {

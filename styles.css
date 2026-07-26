@@ -353,13 +353,15 @@ body {
 }
 
 #aviatorStatusText {
+  position: absolute;
+  top: 12px;
+  right: 12px;
   font-size: 12px;
   font-weight: 700;
   color: var(--text-gray);
   text-transform: uppercase;
   letter-spacing: 1px;
-  display: block;
-  margin-bottom: 6px;
+  pointer-events: none;
 }
 
 #aviatorMultiplierVal {
