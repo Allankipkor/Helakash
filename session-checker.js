@@ -58,7 +58,7 @@
 
         alert("Your account no longer exists. Please sign in again.");
 
-        window.location.href = "/signin";
+        window.location.href = "/";
 
     }
 
