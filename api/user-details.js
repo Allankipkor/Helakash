@@ -5,7 +5,7 @@ const sql = neon(process.env.POSTGRES_URL || process.env.DATABASE_URL, { fullRes
 export default async function handler(req, res) {
   // Allow GET or POST
   const phone = req.query.phone || (req.body && req.body.phone);
-  
+
   if (!phone) {
     return res.status(400).json({ error: "Phone number is required." });
   }
@@ -25,14 +25,10 @@ export default async function handler(req, res) {
     `;
 
     if (userQuery.rows.length === 0) {
-      // Create user with starting balance of 0 KES (production real money mode)
-      await sql`
-        INSERT INTO helakash_users (phone, balance, password_hash) 
-        VALUES (${cleanPhone}, 0.00, 'NO_PASSWORD_MIGRATED');
-      `;
-      userQuery = await sql`
-        SELECT balance FROM helakash_users WHERE phone = ${cleanPhone};
-      `;
+      return res.status(401).json({
+        success: false,
+        error: "User account not found."
+      });
     }
 
     const balance = parseFloat(userQuery.rows[0].balance);
