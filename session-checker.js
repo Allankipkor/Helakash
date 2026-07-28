@@ -24,37 +24,21 @@
                 }
             );
 
-            // Server unavailable
-            if (!response.ok) return;
+            // User deleted
+            if (response.status === 401 || response.status === 404) {
+                forceLogout();
+                return;
+            }
+
+            // Ignore temporary server errors
+            if (!response.ok) {
+                return;
+            }
 
             const data = await response.json();
 
-            /*
-                Treat any of these as "user deleted":
-
-                {
-                    success:false
-                }
-
-                or
-
-                {
-                    success:true,
-                    deleted:true
-                }
-
-                or
-
-                HTTP 404 returned by your API.
-            */
-
-            if (
-                !data.success ||
-                data.deleted === true
-            ) {
-
+            if (!data.success || data.deleted === true) {
                 forceLogout();
-
             }
 
         } catch (err) {
@@ -72,9 +56,9 @@
 
         sessionStorage.clear();
 
-        alert("Your session has expired. Please sign in again.");
+        alert("Your account no longer exists. Please sign in again.");
 
-        window.location.reload();
+        window.location.href = "https://pesakash.com/login";
 
     }
 
