@@ -36,7 +36,7 @@ document.addEventListener("DOMContentLoaded", () => {
     transactions = JSON.parse(localStorage.getItem("helakash_txs"));
   } else {
     transactions = [
-      { type: 'Deposit', amount: 250, status: 'Success', date: new Date(Date.now() - 3600000 * 2).toLocaleString() },
+      { type: 'Deposit', amount: 300, status: 'Success', date: new Date(Date.now() - 3600000 * 2).toLocaleString() },
       { type: 'Aviator Win', amount: 35, status: 'Success', date: new Date(Date.now() - 3600000).toLocaleString() }
     ];
     saveTransactions();
@@ -1057,8 +1057,8 @@ function openDepositModal(defaultMethod = 'mpesa') {
   document.getElementById("stkModal").classList.add("active");
   document.getElementById("stkLoadingView").classList.add("hidden");
   document.getElementById("paystackLoadingView").classList.add("hidden");
-  document.getElementById("depositAmount").value = 250;
-  document.getElementById("paystackDepositAmount").value = 250;
+  document.getElementById("depositAmount").value = 300;
+  document.getElementById("paystackDepositAmount").value = 300;
   
   // Show tab selection header
   document.getElementById("depositTabHeader").style.display = "flex";
@@ -1096,8 +1096,8 @@ function handlePaystackDepositSubmit(event) {
   event.preventDefault();
   
   const amount = parseInt(document.getElementById("paystackDepositAmount").value);
-  if (isNaN(amount) || amount < 250) {
-    alert("Minimum deposit is KES 250");
+  if (isNaN(amount) || amount < 300) {
+    alert("Minimum deposit is KES 300");
     return;
   }
   
@@ -1223,8 +1223,8 @@ function handleDepositSubmit(event) {
   const amount = parseInt(document.getElementById("depositAmount").value);
   const phone = document.getElementById("depositPhone").value.trim();
   
-  if (isNaN(amount) || amount < 250) {
-    alert("Minimum deposit is KES 250");
+  if (isNaN(amount) || amount < 300) {
+    alert("Minimum deposit is KES 300");
     return;
   }
   
@@ -1511,7 +1511,7 @@ function simulateAgentReply(userText) {
     showTypingIndicator(false);
     
     if (normText.includes("1") || normText.includes("deposit")) {
-      addMessage("agent", "To deposit money:\n1. Click the central purple **DEPOSIT** button in the bottom navigation bar.\n2. Input the amount (minimum KES 250) and your M-Pesa phone number.\n3. Approve the STK Push prompt on your mobile phone by inputting your M-Pesa PIN.");
+      addMessage("agent", "To deposit money:\n1. Click the central purple **DEPOSIT** button in the bottom navigation bar.\n2. Input the amount (minimum KES 300) and your M-Pesa phone number.\n3. Approve the STK Push prompt on your mobile phone by inputting your M-Pesa PIN.");
     } else if (normText.includes("2") || normText.includes("withdraw")) {
       addMessage("agent", "To withdraw winnings:\n1. Click on the **WALLET** tab at the bottom.\n2. Enter the amount (minimum KES 500) and specify your M-Pesa number.\n3. Click submit request. Cashouts are processed immediately.");
     } else if (normText.includes("3") || normText.includes("integrity") || normText.includes("fair")) {

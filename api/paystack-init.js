@@ -14,8 +14,8 @@ export default async function handler(req, res) {
   }
 
   const parsedAmount = parseInt(amount);
-  if (isNaN(parsedAmount) || parsedAmount < 250) {
-    return res.status(400).json({ error: 'Minimum deposit amount is KES 250.' });
+  if (isNaN(parsedAmount) || parsedAmount < 300) {
+    return res.status(400).json({ error: 'Minimum deposit amount is KES 300.' });
   }
 
   // Normalize phone number (account owner who gets credited)
