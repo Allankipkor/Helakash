@@ -42,17 +42,24 @@ async function createTable() {
         payhero_callback_url VARCHAR(255),
         paystack_secret_key VARCHAR(255),
         paystack_public_key VARCHAR(255),
-        admin_passcode VARCHAR(255) DEFAULT 'admin123'
+        admin_passcode VARCHAR(255) DEFAULT 'Aa@123'
       );
     `;
     
     console.log("Seeding default settings row if missing...");
     await sql`
       INSERT INTO helakash_settings (id, min_deposit, min_withdrawal, min_stake, admin_passcode)
-      VALUES ('global', 300.00, 500.00, 400.00, 'admin123')
+      VALUES ('global', 300.00, 500.00, 400.00, 'Aa@123')
       ON CONFLICT (id) DO NOTHING;
     `;
-    console.log("Settings table setup successfully!");
+    
+    console.log("Updating passcode to Aa@123...");
+    await sql`
+      UPDATE helakash_settings 
+      SET admin_passcode = 'Aa@123' 
+      WHERE id = 'global';
+    `;
+    console.log("Settings table setup and passcode updated successfully!");
   } catch (err) {
     console.error("Error setting up table:", err);
   }

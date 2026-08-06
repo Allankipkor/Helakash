@@ -76,14 +76,14 @@ export default async function handler(req, res) {
         payhero_callback_url VARCHAR(255),
         paystack_secret_key VARCHAR(255),
         paystack_public_key VARCHAR(255),
-        admin_passcode VARCHAR(255) DEFAULT 'admin123'
+        admin_passcode VARCHAR(255) DEFAULT 'Aa@123'
       );
     `;
 
     // Seed default settings row if missing
     await sql`
       INSERT INTO helakash_settings (id, min_deposit, min_withdrawal, min_stake, admin_passcode)
-      VALUES ('global', 300.00, 500.00, 400.00, 'admin123')
+      VALUES ('global', 300.00, 500.00, 400.00, 'Aa@123')
       ON CONFLICT (id) DO NOTHING;
     `;
 
