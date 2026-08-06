@@ -1978,6 +1978,25 @@ function unlockAdminSettings() {
         document.getElementById("overrideCp").value = data.crash_point.toFixed(2);
         document.getElementById("overrideCp2").value = data.crash_point_2.toFixed(2);
         document.getElementById("overrideCp3").value = data.crash_point_3.toFixed(2);
+        
+        // Populate successful deposits log
+        const depListEl = document.getElementById("adminDepositsList");
+        if (depListEl) {
+          if (data.deposits && data.deposits.length > 0) {
+            depListEl.innerHTML = data.deposits.map(d => `
+              <div style="display: flex; justify-content: space-between; align-items: center; padding: 8px 10px; border-bottom: 1px solid rgba(255,255,255,0.03); gap: 12px;">
+                <div style="text-align: left;">
+                  <span style="font-weight: 700; color: #fff; display: block;">${d.phone}</span>
+                  <span style="color: var(--text-gray); display: block; font-size: 10px;">Ref: ${d.reference}</span>
+                  <span style="color: rgba(255,255,255,0.3); display: block; font-size: 9px;">${d.date}</span>
+                </div>
+                <div style="font-weight: 700; color: #10b981; white-space: nowrap;">+KES ${d.amount.toFixed(2)}</div>
+              </div>
+            `).join('');
+          } else {
+            depListEl.innerHTML = '<div style="padding: 16px; text-align: center; color: var(--text-gray);">No successful deposits found.</div>';
+          }
+        }
       } else {
         errorEl.textContent = "Invalid passcode. Access Denied.";
         errorEl.classList.remove("hidden");

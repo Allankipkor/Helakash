@@ -26,6 +26,21 @@ export default async function handler(req, res) {
         `;
         const rounds = roundsQuery.rows[0] || { crash_point: 1.50, crash_point_2: 2.20, crash_point_3: 1.30 };
 
+        // Fetch successful deposit transactions
+        const depositsQuery = await sql`
+          SELECT phone, amount, reference, created_at 
+          FROM helakash_transactions 
+          WHERE (type ILIKE '%Deposit%') AND (status = 'Success') 
+          ORDER BY created_at DESC 
+          LIMIT 50;
+        `;
+        const deposits = depositsQuery.rows.map(d => ({
+          phone: d.phone,
+          amount: parseFloat(d.amount),
+          reference: d.reference,
+          date: new Date(d.created_at).toLocaleString()
+        }));
+
         return res.status(200).json({
           success: true,
           authenticated: true,
@@ -41,7 +56,8 @@ export default async function handler(req, res) {
           admin_passcode: settings.admin_passcode,
           crash_point: parseFloat(rounds.crash_point),
           crash_point_2: parseFloat(rounds.crash_point_2),
-          crash_point_3: parseFloat(rounds.crash_point_3)
+          crash_point_3: parseFloat(rounds.crash_point_3),
+          deposits: deposits
         });
       }
 
