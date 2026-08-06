@@ -1683,7 +1683,7 @@ function handleSignInSubmit(event) {
   }
   
   // Authenticate against database
-  fetch("/api/login", {
+  fetch("/api/auth?action=login", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ phone: cleanPhone, password })
@@ -1731,7 +1731,7 @@ function handleSignUpSubmit(event) {
   }
   
   // Register against database
-  fetch("/api/signup", {
+  fetch("/api/auth?action=signup", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ phone: cleanPhone, password })
