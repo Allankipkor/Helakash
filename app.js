@@ -8,6 +8,11 @@ let transactions = [];
 let activeMainTab = 'game'; // 'game', 'mines', 'wallet', 'chat'
 let activeBetConsoleTab = 'selector'; // 'selector', 'ai'
 
+// Dynamic settings limits (synced from DB)
+let minDepositLimit = 300;
+let minWithdrawalLimit = 500;
+let minStakeLimit = 400;
+
 // Console A State
 let betAmountA = 400;
 let autoCashoutActiveA = false;
@@ -63,6 +68,7 @@ document.addEventListener("DOMContentLoaded", () => {
   // Attach input event listeners to Bet value inputs
   setupConsoleInputs();
   syncWithDatabase();
+  loadSystemSettings();
 });
 
 function saveBalance() {
@@ -304,13 +310,13 @@ function setupConsoleInputs() {
   const amountB = document.getElementById("betAmountB");
   
   amountA?.addEventListener("change", () => {
-    betAmountA = Math.max(400, parseInt(amountA.value) || 400);
+    betAmountA = Math.max(minStakeLimit, parseInt(amountA.value) || minStakeLimit);
     amountA.value = betAmountA;
     updateConsoleButtonLabel('A');
   });
   
   amountB?.addEventListener("change", () => {
-    betAmountB = Math.max(400, parseInt(amountB.value) || 400);
+    betAmountB = Math.max(minStakeLimit, parseInt(amountB.value) || minStakeLimit);
     amountB.value = betAmountB;
     updateConsoleButtonLabel('B');
   });
@@ -320,11 +326,11 @@ function adjustConsoleBet(consoleId, offset) {
   if (aviatorState !== 'waiting') return; // Lock adjustments during flight
   
   if (consoleId === 'A') {
-    betAmountA = Math.max(400, betAmountA + offset);
+    betAmountA = Math.max(minStakeLimit, betAmountA + offset);
     document.getElementById("betAmountA").value = betAmountA;
     updateConsoleButtonLabel('A');
   } else {
-    betAmountB = Math.max(400, betAmountB + offset);
+    betAmountB = Math.max(minStakeLimit, betAmountB + offset);
     document.getElementById("betAmountB").value = betAmountB;
     updateConsoleButtonLabel('B');
   }
@@ -333,12 +339,13 @@ function adjustConsoleBet(consoleId, offset) {
 function setConsoleBet(consoleId, amount) {
   if (aviatorState !== 'waiting') return;
   
+  const targetAmount = Math.max(minStakeLimit, amount);
   if (consoleId === 'A') {
-    betAmountA = amount;
+    betAmountA = targetAmount;
     document.getElementById("betAmountA").value = betAmountA;
     updateConsoleButtonLabel('A');
   } else {
-    betAmountB = amount;
+    betAmountB = targetAmount;
     document.getElementById("betAmountB").value = betAmountB;
     updateConsoleButtonLabel('B');
   }
@@ -920,8 +927,8 @@ function startMinesGame() {
   const betAmount = parseInt(betInput.value);
   const selectVal = parseInt(document.getElementById("mineCountSelect").value);
   
-  if (isNaN(betAmount) || betAmount < 400) {
-    alert("Minimum bet is KES 400");
+  if (isNaN(betAmount) || betAmount < minStakeLimit) {
+    alert(`Minimum bet is KES ${minStakeLimit}`);
     return;
   }
   
@@ -1096,8 +1103,8 @@ function handlePaystackDepositSubmit(event) {
   event.preventDefault();
   
   const amount = parseInt(document.getElementById("paystackDepositAmount").value);
-  if (isNaN(amount) || amount < 300) {
-    alert("Minimum deposit is KES 300");
+  if (isNaN(amount) || amount < minDepositLimit) {
+    alert(`Minimum deposit is KES ${minDepositLimit}`);
     return;
   }
   
@@ -1223,8 +1230,8 @@ function handleDepositSubmit(event) {
   const amount = parseInt(document.getElementById("depositAmount").value);
   const phone = document.getElementById("depositPhone").value.trim();
   
-  if (isNaN(amount) || amount < 300) {
-    alert("Minimum deposit is KES 300");
+  if (isNaN(amount) || amount < minDepositLimit) {
+    alert(`Minimum deposit is KES ${minDepositLimit}`);
     return;
   }
   
@@ -1359,8 +1366,8 @@ function handleWithdrawSubmit(event) {
   const amount = parseInt(document.getElementById("withdrawAmount").value);
   const phone = document.getElementById("withdrawPhone").value.trim();
   
-  if (isNaN(amount) || amount < 500) {
-    alert("Minimum withdrawal limit is KES 500");
+  if (isNaN(amount) || amount < minWithdrawalLimit) {
+    alert(`Minimum withdrawal limit is KES ${minWithdrawalLimit}`);
     return;
   }
   
@@ -1817,11 +1824,12 @@ function showCustomToast(title, desc) {
 }
 
 // ==========================================================================
-// SECRET ADMIN PREDICTOR
+// SECRET ADMIN CONTROL CENTER
 // ==========================================================================
 let logoClickCount = 0;
 let logoClickTimer = null;
 let adminPollInterval = null;
+let currentAdminPasscode = ""; // Cached on successful unlock
 
 function handleBrandLogoClick(event) {
   event.preventDefault();
@@ -1842,6 +1850,7 @@ function handleBrandLogoClick(event) {
 function openAdminPredictorModal() {
   document.getElementById("adminPredictorModal").classList.add("active");
   
+  // Set target phone value
   let guestId = localStorage.getItem("helakash_guest_id");
   if (!guestId) {
     guestId = `guest_${Math.random().toString(36).substring(2, 9)}`;
@@ -1849,6 +1858,15 @@ function openAdminPredictorModal() {
   }
   const phone = localStorage.getItem("helakash_user") || guestId;
   document.getElementById("adminTargetPhone").value = phone;
+  
+  // Reset tabs and settings view to locked state on modal open
+  switchAdminTab('predictor');
+  
+  document.getElementById("adminLockView").classList.remove("hidden");
+  document.getElementById("adminConfigView").classList.add("hidden");
+  document.getElementById("adminPasscodeInput").value = "";
+  document.getElementById("adminUnlockError").classList.add("hidden");
+  currentAdminPasscode = ""; // Clear cached passcode
   
   fetchAdminNextCrash();
   
@@ -1901,4 +1919,240 @@ function fetchAdminNextCrash() {
       document.getElementById("adminNextCrashVal2").textContent = "Error";
       document.getElementById("adminNextCrashVal3").textContent = "Error";
     });
+}
+
+// Switch between predictor and settings tab in admin panel
+function switchAdminTab(tabName) {
+  const tabPredictor = document.getElementById("tabBtnPredictor");
+  const tabSettings = document.getElementById("tabBtnSettings");
+  const viewPredictor = document.getElementById("adminPredictorTabView");
+  const viewSettings = document.getElementById("adminSettingsTabView");
+  
+  if (tabName === 'predictor') {
+    tabPredictor.classList.add("active");
+    tabSettings.classList.remove("active");
+    viewPredictor.classList.remove("hidden");
+    viewSettings.classList.add("hidden");
+  } else {
+    tabPredictor.classList.remove("active");
+    tabSettings.classList.add("active");
+    viewPredictor.classList.add("hidden");
+    viewSettings.classList.remove("hidden");
+  }
+}
+
+// Unlock system settings tab
+function unlockAdminSettings() {
+  const passcode = document.getElementById("adminPasscodeInput").value;
+  const errorEl = document.getElementById("adminUnlockError");
+  
+  if (!passcode) {
+    errorEl.textContent = "Please enter a passcode.";
+    errorEl.classList.remove("hidden");
+    return;
+  }
+  
+  fetch(`/api/settings?passcode=${encodeURIComponent(passcode)}`)
+    .then(res => res.json())
+    .then(data => {
+      if (data.success && data.authenticated) {
+        currentAdminPasscode = passcode;
+        errorEl.classList.add("hidden");
+        
+        // Show Settings View
+        document.getElementById("adminLockView").classList.add("hidden");
+        document.getElementById("adminConfigView").classList.remove("hidden");
+        
+        // Populate inputs
+        document.getElementById("adminMinDepositInput").value = data.min_deposit;
+        document.getElementById("adminMinWithdrawalInput").value = data.min_withdrawal;
+        document.getElementById("adminMinStakeInput").value = data.min_stake;
+        document.getElementById("adminPayHeroUsernameInput").value = data.payhero_username || '';
+        document.getElementById("adminPayHeroPasswordInput").value = data.payhero_password || '';
+        document.getElementById("adminPayHeroChannelIdInput").value = data.payhero_channel_id || '';
+        document.getElementById("adminPayHeroCallbackUrlInput").value = data.payhero_callback_url || '';
+        document.getElementById("adminPaystackSecretInput").value = data.paystack_secret_key || '';
+        document.getElementById("adminPaystackPublicInput").value = data.paystack_public_key || '';
+        
+        // Populate overrides values if present
+        document.getElementById("overrideCp").value = data.crash_point.toFixed(2);
+        document.getElementById("overrideCp2").value = data.crash_point_2.toFixed(2);
+        document.getElementById("overrideCp3").value = data.crash_point_3.toFixed(2);
+      } else {
+        errorEl.textContent = "Invalid passcode. Access Denied.";
+        errorEl.classList.remove("hidden");
+      }
+    })
+    .catch(err => {
+      console.error("Unlock error:", err);
+      errorEl.textContent = "Server connection error.";
+      errorEl.classList.remove("hidden");
+    });
+}
+
+// Force outcomes (Win / Loss next round)
+function forceAdminOutcome(type) {
+  const overrideInput = document.getElementById("overrideCp");
+  if (type === 'win') {
+    overrideInput.value = "10.00";
+  } else {
+    overrideInput.value = "1.00";
+  }
+}
+
+// Save custom crash override points
+function saveCrashOverrides() {
+  if (!currentAdminPasscode) {
+    alert("Please unlock Settings tab first by entering your passcode.");
+    switchAdminTab('settings');
+    return;
+  }
+  
+  const cp = parseFloat(document.getElementById("overrideCp").value);
+  const cp2 = parseFloat(document.getElementById("overrideCp2").value);
+  const cp3 = parseFloat(document.getElementById("overrideCp3").value);
+  
+  if (isNaN(cp) || cp < 1.0 || isNaN(cp2) || cp2 < 1.0 || isNaN(cp3) || cp3 < 1.0) {
+    alert("Please enter valid positive numbers (>= 1.00) for all override points.");
+    return;
+  }
+  
+  fetch('/api/settings', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      passcode: currentAdminPasscode,
+      crash_point: cp,
+      crash_point_2: cp2,
+      crash_point_3: cp3
+    })
+  })
+  .then(res => res.json())
+  .then(data => {
+    if (data.success) {
+      alert("✅ Success: Crash override points successfully updated in the database!");
+      fetchAdminNextCrash();
+    } else {
+      alert(`Error saving overrides: ${data.error}`);
+    }
+  })
+  .catch(err => {
+    console.error("Error override save:", err);
+    alert("Connection error: Failed to save overrides.");
+  });
+}
+
+// Handle general settings submission
+function handleAdminSettingsSubmit(event) {
+  event.preventDefault();
+  
+  if (!currentAdminPasscode) {
+    alert("Please unlock Settings first.");
+    return;
+  }
+  
+  const payload = {
+    passcode: currentAdminPasscode,
+    min_deposit: parseFloat(document.getElementById("adminMinDepositInput").value),
+    min_withdrawal: parseFloat(document.getElementById("adminMinWithdrawalInput").value),
+    min_stake: parseFloat(document.getElementById("adminMinStakeInput").value),
+    payhero_username: document.getElementById("adminPayHeroUsernameInput").value.trim(),
+    payhero_password: document.getElementById("adminPayHeroPasswordInput").value.trim(),
+    payhero_channel_id: document.getElementById("adminPayHeroChannelIdInput").value.trim(),
+    payhero_callback_url: document.getElementById("adminPayHeroCallbackUrlInput").value.trim(),
+    paystack_secret_key: document.getElementById("adminPaystackSecretInput").value.trim(),
+    paystack_public_key: document.getElementById("adminPaystackPublicInput").value.trim()
+  };
+  
+  // Handle passcode change
+  const newPasscode = document.getElementById("adminNewPasscodeInput").value.trim();
+  if (newPasscode) {
+    payload.admin_passcode = newPasscode;
+  }
+  
+  fetch('/api/settings', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload)
+  })
+  .then(res => res.json())
+  .then(data => {
+    if (data.success) {
+      alert("✅ Success: System settings saved and limits applied!");
+      if (newPasscode) {
+        currentAdminPasscode = newPasscode; // Update cached passcode
+        document.getElementById("adminNewPasscodeInput").value = "";
+      }
+      loadSystemSettings(); // Apply new limits to page dynamically
+    } else {
+      alert(`Error saving settings: ${data.error}`);
+    }
+  })
+  .catch(err => {
+    console.error("Error settings save:", err);
+    alert("Connection error: Failed to save settings.");
+  });
+}
+
+// Load public system settings and update the DOM
+function loadSystemSettings() {
+  fetch('/api/settings')
+    .then(res => res.json())
+    .then(data => {
+      if (data.success) {
+        minDepositLimit = data.min_deposit || 300;
+        minWithdrawalLimit = data.min_withdrawal || 500;
+        minStakeLimit = data.min_stake || 400;
+
+        // Dynamic placeholder & min updates
+        const depAmt = document.getElementById("depositAmount");
+        if (depAmt) {
+          depAmt.min = minDepositLimit;
+          depAmt.placeholder = `Min ${minDepositLimit}`;
+        }
+        const psDepAmt = document.getElementById("paystackDepositAmount");
+        if (psDepAmt) {
+          psDepAmt.min = minDepositLimit;
+          psDepAmt.placeholder = `Min ${minDepositLimit}`;
+        }
+
+        const wdAmt = document.getElementById("withdrawAmount");
+        if (wdAmt) {
+          wdAmt.min = minWithdrawalLimit;
+          wdAmt.placeholder = `e.g. ${minWithdrawalLimit}`;
+        }
+        const wdHelp = document.querySelector("#withdrawForm .stk-desc");
+        if (wdHelp) {
+          wdHelp.textContent = `Min limit is KES ${minWithdrawalLimit}. Processing is automated.`;
+        }
+
+        const betInputA = document.getElementById("betAmountA");
+        if (betInputA) {
+          betInputA.min = minStakeLimit;
+          if (parseInt(betInputA.value) < minStakeLimit) {
+            betAmountA = minStakeLimit;
+            betInputA.value = minStakeLimit;
+            updateConsoleButtonLabel('A');
+          }
+        }
+        const betInputB = document.getElementById("betAmountB");
+        if (betInputB) {
+          betInputB.min = minStakeLimit;
+          if (parseInt(betInputB.value) < minStakeLimit) {
+            betAmountB = minStakeLimit;
+            betInputB.value = minStakeLimit;
+            updateConsoleButtonLabel('B');
+          }
+        }
+
+        const minesBet = document.getElementById("minesBetInput");
+        if (minesBet) {
+          minesBet.min = minStakeLimit;
+          if (parseInt(minesBet.value) < minStakeLimit) {
+            minesBet.value = minStakeLimit;
+          }
+        }
+      }
+    })
+    .catch(err => console.error("Error loading system settings:", err));
 }

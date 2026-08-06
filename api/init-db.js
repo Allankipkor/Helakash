@@ -63,7 +63,31 @@ export default async function handler(req, res) {
       ON CONFLICT (phone) DO NOTHING;
     `;
 
-    return res.status(200).json({ success: true, message: "PesaKash production database tables initialized successfully" });
+    // 5. Create helakash_settings table if not exists
+    await sql`
+      CREATE TABLE IF NOT EXISTS helakash_settings (
+        id VARCHAR(30) PRIMARY KEY,
+        min_deposit DECIMAL(12, 2) DEFAULT 300.00,
+        min_withdrawal DECIMAL(12, 2) DEFAULT 500.00,
+        min_stake DECIMAL(12, 2) DEFAULT 400.00,
+        payhero_username VARCHAR(255),
+        payhero_password VARCHAR(255),
+        payhero_channel_id VARCHAR(255),
+        payhero_callback_url VARCHAR(255),
+        paystack_secret_key VARCHAR(255),
+        paystack_public_key VARCHAR(255),
+        admin_passcode VARCHAR(255) DEFAULT 'admin123'
+      );
+    `;
+
+    // Seed default settings row if missing
+    await sql`
+      INSERT INTO helakash_settings (id, min_deposit, min_withdrawal, min_stake, admin_passcode)
+      VALUES ('global', 300.00, 500.00, 400.00, 'admin123')
+      ON CONFLICT (id) DO NOTHING;
+    `;
+
+    return res.status(200).json({ success: true, message: "PesaKash production database tables and settings initialized successfully" });
   } catch (error) {
     console.error("Database initialization error:", error);
     return res.status(500).json({ error: error.message });

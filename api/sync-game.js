@@ -12,6 +12,22 @@ export default async function handler(req, res) {
     return res.status(400).json({ error: 'Phone, type, and amount are required.' });
   }
 
+  // Load min stake setting from DB
+  let minStake = 400;
+  try {
+    const settingsQuery = await sql`SELECT min_stake FROM helakash_settings WHERE id = 'global';`;
+    if (settingsQuery.rows.length > 0) {
+      minStake = parseFloat(settingsQuery.rows[0].min_stake);
+    }
+  } catch (dbErr) {
+    console.error("Error reading helakash_settings in sync-game.js:", dbErr);
+  }
+
+  // Validate bet amount if provided
+  if (betAmount !== undefined && parseFloat(betAmount) < minStake) {
+    return res.status(400).json({ error: `Minimum stake limit is KES ${minStake}.` });
+  }
+
   let cleanPhone = phone.replace(/\D/g, '');
   if (cleanPhone.startsWith('0')) {
     cleanPhone = '254' + cleanPhone.substring(1);

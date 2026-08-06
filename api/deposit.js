@@ -13,8 +13,38 @@ export default async function handler(req, res) {
     return res.status(400).json({ error: 'Amount and phone number are required.' });
   }
 
-  if (parseInt(amount) < 300) {
-    return res.status(400).json({ error: 'Minimum deposit amount is KES 300.' });
+  const cleanEnvVar = (val) => {
+    if (!val) return val;
+    let clean = val.trim();
+    if ((clean.startsWith('"') && clean.endsWith('"')) || (clean.startsWith("'") && clean.endsWith("'"))) {
+      clean = clean.slice(1, -1);
+    }
+    return clean.trim();
+  };
+
+  // Default fallback values
+  let minDeposit = 300;
+  let username = cleanEnvVar(process.env.PAYHERO_USERNAME);
+  let password = cleanEnvVar(process.env.PAYHERO_PASSWORD);
+  let channelId = cleanEnvVar(process.env.PAYHERO_CHANNEL_ID);
+  let callbackUrl = cleanEnvVar(process.env.PAYHERO_CALLBACK_URL);
+
+  try {
+    const settingsQuery = await sql`SELECT * FROM helakash_settings WHERE id = 'global';`;
+    if (settingsQuery.rows.length > 0) {
+      const dbSettings = settingsQuery.rows[0];
+      minDeposit = parseFloat(dbSettings.min_deposit);
+      if (dbSettings.payhero_username) username = dbSettings.payhero_username;
+      if (dbSettings.payhero_password) password = dbSettings.payhero_password;
+      if (dbSettings.payhero_channel_id) channelId = dbSettings.payhero_channel_id;
+      if (dbSettings.payhero_callback_url) callbackUrl = dbSettings.payhero_callback_url;
+    }
+  } catch (dbErr) {
+    console.error("Error reading helakash_settings in deposit.js:", dbErr);
+  }
+
+  if (parseInt(amount) < minDeposit) {
+    return res.status(400).json({ error: `Minimum deposit amount is KES ${minDeposit}.` });
   }
 
   // Clean payment phone number (receives the STK push prompt)
@@ -41,20 +71,6 @@ export default async function handler(req, res) {
   if (!/^254[71]\d{8}$/.test(cleanAccountPhone)) {
     return res.status(400).json({ error: 'Invalid account phone number format.' });
   }
-
-  const cleanEnvVar = (val) => {
-    if (!val) return val;
-    let clean = val.trim();
-    if ((clean.startsWith('"') && clean.endsWith('"')) || (clean.startsWith("'") && clean.endsWith("'"))) {
-      clean = clean.slice(1, -1);
-    }
-    return clean.trim();
-  };
-
-  const username = cleanEnvVar(process.env.PAYHERO_USERNAME);
-  const password = cleanEnvVar(process.env.PAYHERO_PASSWORD);
-  const channelId = cleanEnvVar(process.env.PAYHERO_CHANNEL_ID);
-  let callbackUrl = cleanEnvVar(process.env.PAYHERO_CALLBACK_URL);
   if (!callbackUrl && req.headers && req.headers.host) {
     const protocol = req.headers.host.includes('localhost') || req.headers.host.includes('127.0.0.1') ? 'http' : 'https';
     callbackUrl = `${protocol}://${req.headers.host}/api/callback`;

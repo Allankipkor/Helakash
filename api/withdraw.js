@@ -12,8 +12,18 @@ export default async function handler(req, res) {
     return res.status(400).json({ error: 'Amount and phone number are required.' });
   }
 
-  if (parseFloat(amount) < 500) {
-    return res.status(400).json({ error: 'Minimum withdrawal amount is KES 500.' });
+  let minWithdrawal = 500;
+  try {
+    const settingsQuery = await sql`SELECT min_withdrawal FROM helakash_settings WHERE id = 'global';`;
+    if (settingsQuery.rows.length > 0) {
+      minWithdrawal = parseFloat(settingsQuery.rows[0].min_withdrawal);
+    }
+  } catch (dbErr) {
+    console.error("Error reading helakash_settings in withdraw.js:", dbErr);
+  }
+
+  if (parseFloat(amount) < minWithdrawal) {
+    return res.status(400).json({ error: `Minimum withdrawal amount is KES ${minWithdrawal}.` });
   }
 
   let cleanPhone = phone.replace(/\D/g, '');

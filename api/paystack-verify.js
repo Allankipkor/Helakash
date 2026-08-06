@@ -20,7 +20,17 @@ export default async function handler(req, res) {
     return clean.trim();
   };
 
-  const secretKey = cleanEnvVar(process.env.PAYSTACK_SECRET_KEY);
+  let secretKey = cleanEnvVar(process.env.PAYSTACK_SECRET_KEY);
+
+  try {
+    const settingsQuery = await sql`SELECT paystack_secret_key FROM helakash_settings WHERE id = 'global';`;
+    if (settingsQuery.rows.length > 0) {
+      const dbSettings = settingsQuery.rows[0];
+      if (dbSettings.paystack_secret_key) secretKey = dbSettings.paystack_secret_key;
+    }
+  } catch (dbErr) {
+    console.error("Error reading helakash_settings in paystack-verify.js:", dbErr);
+  }
 
   // Check if simulated reference
   const isSimulated = reference.startsWith('PS-SIM-');

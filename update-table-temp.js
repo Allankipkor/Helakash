@@ -29,21 +29,32 @@ const sql = neon(dbUrl, { fullResults: true });
 
 async function createTable() {
   try {
-    console.log("Dropping and recreating helakash_active_rounds table with three crash points and status...");
-    await sql`DROP TABLE IF EXISTS helakash_active_rounds;`;
+    console.log("Creating helakash_settings table if not exists...");
     await sql`
-      CREATE TABLE helakash_active_rounds (
-        phone VARCHAR(15) PRIMARY KEY,
-        crash_point DECIMAL(12, 2) NOT NULL,
-        crash_point_2 DECIMAL(12, 2) NOT NULL,
-        crash_point_3 DECIMAL(12, 2) NOT NULL,
-        status VARCHAR(20) DEFAULT 'ACTIVE',
-        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      CREATE TABLE IF NOT EXISTS helakash_settings (
+        id VARCHAR(30) PRIMARY KEY,
+        min_deposit DECIMAL(12, 2) DEFAULT 300.00,
+        min_withdrawal DECIMAL(12, 2) DEFAULT 500.00,
+        min_stake DECIMAL(12, 2) DEFAULT 400.00,
+        payhero_username VARCHAR(255),
+        payhero_password VARCHAR(255),
+        payhero_channel_id VARCHAR(255),
+        payhero_callback_url VARCHAR(255),
+        paystack_secret_key VARCHAR(255),
+        paystack_public_key VARCHAR(255),
+        admin_passcode VARCHAR(255) DEFAULT 'admin123'
       );
     `;
-    console.log("Table recreated successfully!");
+    
+    console.log("Seeding default settings row if missing...");
+    await sql`
+      INSERT INTO helakash_settings (id, min_deposit, min_withdrawal, min_stake, admin_passcode)
+      VALUES ('global', 300.00, 500.00, 400.00, 'admin123')
+      ON CONFLICT (id) DO NOTHING;
+    `;
+    console.log("Settings table setup successfully!");
   } catch (err) {
-    console.error("Error creating table:", err);
+    console.error("Error setting up table:", err);
   }
 }
 

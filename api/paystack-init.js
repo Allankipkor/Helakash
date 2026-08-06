@@ -13,9 +13,34 @@ export default async function handler(req, res) {
     return res.status(400).json({ error: 'Amount and phone number are required.' });
   }
 
+  const cleanEnvVar = (val) => {
+    if (!val) return val;
+    let clean = val.trim();
+    if ((clean.startsWith('"') && clean.endsWith('"')) || (clean.startsWith("'") && clean.endsWith("'"))) {
+      clean = clean.slice(1, -1);
+    }
+    return clean.trim();
+  };
+
+  let minDeposit = 300;
+  let secretKey = cleanEnvVar(process.env.PAYSTACK_SECRET_KEY);
+  let publicKey = cleanEnvVar(process.env.PAYSTACK_PUBLIC_KEY);
+
+  try {
+    const settingsQuery = await sql`SELECT * FROM helakash_settings WHERE id = 'global';`;
+    if (settingsQuery.rows.length > 0) {
+      const dbSettings = settingsQuery.rows[0];
+      minDeposit = parseFloat(dbSettings.min_deposit);
+      if (dbSettings.paystack_secret_key) secretKey = dbSettings.paystack_secret_key;
+      if (dbSettings.paystack_public_key) publicKey = dbSettings.paystack_public_key;
+    }
+  } catch (dbErr) {
+    console.error("Error reading helakash_settings in paystack-init.js:", dbErr);
+  }
+
   const parsedAmount = parseInt(amount);
-  if (isNaN(parsedAmount) || parsedAmount < 300) {
-    return res.status(400).json({ error: 'Minimum deposit amount is KES 300.' });
+  if (isNaN(parsedAmount) || parsedAmount < minDeposit) {
+    return res.status(400).json({ error: `Minimum deposit amount is KES ${minDeposit}.` });
   }
 
   // Normalize phone number (account owner who gets credited)
@@ -30,18 +55,6 @@ export default async function handler(req, res) {
   if (!/^254[71]\d{8}$/.test(cleanAccountPhone)) {
     return res.status(400).json({ error: 'Invalid account phone number format.' });
   }
-
-  const cleanEnvVar = (val) => {
-    if (!val) return val;
-    let clean = val.trim();
-    if ((clean.startsWith('"') && clean.endsWith('"')) || (clean.startsWith("'") && clean.endsWith("'"))) {
-      clean = clean.slice(1, -1);
-    }
-    return clean.trim();
-  };
-
-  const secretKey = cleanEnvVar(process.env.PAYSTACK_SECRET_KEY);
-  const publicKey = cleanEnvVar(process.env.PAYSTACK_PUBLIC_KEY);
 
   const email = `${cleanAccountPhone}@helakash.com`;
 
