@@ -1894,10 +1894,10 @@ body {
 }
 
 /* Custom Success Toast Highlight for Cashouts */
-.toast.success-toast {
+.toast-notification.success-toast {
   border: 1px solid rgba(16, 185, 129, 0.45) !important;
-  box-shadow: 0 10px 25px rgba(16, 185, 129, 0.15), 0 10px 20px rgba(0, 0, 0, 0.4) !important;
+  box-shadow: 0 20px 40px rgba(0, 0, 0, 0.6), 0 0 20px rgba(16, 185, 129, 0.25) !important;
 }
-.toast.success-toast .toast-desc strong {
+.toast-notification.success-toast .toast-desc strong {
   color: #10b981 !important;
 }

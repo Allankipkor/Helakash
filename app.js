@@ -1858,31 +1858,35 @@ function showToast(message, type = 'success', duration = 4000) {
 }
 
 function showCashoutToast(multiplier, winnings, isMines = false) {
-  const container = document.getElementById("toastContainer");
+  const container = document.getElementById("toastPopupContainer");
   if (!container) return;
 
   const toast = document.createElement("div");
-  toast.className = "toast success-toast";
+  toast.className = "toast-notification success-toast";
   
+  const duration = 5000;
+  toast.style.animation = `toast-slide-in 0.4s cubic-bezier(0.16, 1, 0.3, 1) forwards, toast-fade-out 0.4s cubic-bezier(0.7, 0, 0.84, 0) forwards`;
+  toast.style.animationDelay = `0s, ${duration - 400}ms`;
+
   const gameName = isMines ? "Mines" : "Aviator";
   const icon = isMines ? "🎉" : "✈️";
 
   toast.innerHTML = `
-    <div class="toast-icon" style="background: rgba(16, 185, 129, 0.2); color: #10b981;">${icon}</div>
-    <div class="toast-body">
-      <div class="toast-title" style="color: #10b981; font-weight: 800; font-size: 11px;">YOU CASHED OUT!</div>
-      <div class="toast-desc" style="font-size: 10px;">Earned <strong>KES ${winnings.toFixed(2)}</strong> playing ${gameName} (x${multiplier.toFixed(2)})</div>
+    <div class="toast-icon" style="background: rgba(16, 185, 129, 0.2); color: #10b981; width: 32px; height: 32px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 16px;">${icon}</div>
+    <div class="toast-body" style="display: flex; flex-direction: column; gap: 2px;">
+      <div class="toast-title" style="color: #10b981; font-weight: 800; font-size: 13px; letter-spacing: 0.5px;">YOU CASHED OUT!</div>
+      <div class="toast-desc" style="font-size: 11px; color: rgba(255, 255, 255, 0.7);">Earned <strong style="color: #10b981;">KES ${winnings.toFixed(2)}</strong> playing ${gameName} (x${multiplier.toFixed(2)})</div>
     </div>
+    <button class="toast-close" onclick="this.parentElement.remove()" style="margin-left: auto; background: transparent; border: none; color: rgba(255,255,255,0.4); font-size: 20px; cursor: pointer; line-height: 1; outline: none;">&times;</button>
   `;
   
   container.appendChild(toast);
   
   setTimeout(() => {
-    toast.classList.add("removing");
-    setTimeout(() => {
+    if (toast.parentNode) {
       toast.remove();
-    }, 400);
-  }, 5000);
+    }
+  }, duration);
 }
 
 
