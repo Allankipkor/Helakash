@@ -863,7 +863,7 @@ function cashOutConsoleBet(consoleId, multiplier) {
     btn.disabled = true;
   }
   
-  alert(`✈️ CASH OUT SUCCESS! Console ${consoleId} earned KES ${winnings.toFixed(2)} (x${multiplier.toFixed(2)} multiplier)`);
+  showAviatorCashoutBanner(multiplier, winnings);
 }
 
 
@@ -1822,6 +1822,81 @@ function showCustomToast(title, desc) {
     }, 400);
   }, 5000);
 }
+
+function showToast(message, type = 'success', duration = 4000) {
+  const container = document.getElementById("toastPopupContainer");
+  if (!container) return;
+
+  const toast = document.createElement("div");
+  toast.className = `toast-notification ${type}`;
+  
+  // Set animations with custom duration delay
+  toast.style.animation = `toast-slide-in 0.4s cubic-bezier(0.16, 1, 0.3, 1) forwards, toast-fade-out 0.4s cubic-bezier(0.7, 0, 0.84, 0) forwards`;
+  toast.style.animationDelay = `0s, ${duration - 400}ms`;
+
+  let icon = "💰";
+  if (type === 'danger') icon = "💥";
+  else if (type === 'warning') icon = "⚠️";
+  else if (type === 'info') icon = "ℹ️";
+  else if (type === 'success') {
+    icon = message.includes("Console") ? "✈️" : "🎉";
+  }
+
+  toast.innerHTML = `
+    <div class="toast-icon">${icon}</div>
+    <div class="toast-content">${message}</div>
+    <button class="toast-close" onclick="this.parentElement.remove()">&times;</button>
+  `;
+  
+  container.appendChild(toast);
+  
+  setTimeout(() => {
+    if (toast.parentNode) {
+      toast.remove();
+    }
+  }, duration);
+}
+
+function showAviatorCashoutBanner(multiplier, winnings) {
+  const container = document.getElementById("toastPopupContainer");
+  if (!container) return;
+
+  // Clear existing banners if any, to prevent stacking
+  container.innerHTML = "";
+
+  const banner = document.createElement("div");
+  banner.className = "aviator-cashout-banner";
+  
+  const duration = 5000;
+  banner.style.animation = `banner-slide-down 0.4s cubic-bezier(0.16, 1, 0.3, 1) forwards, banner-fade-out 0.4s cubic-bezier(0.7, 0, 0.84, 0) forwards`;
+  banner.style.animationDelay = `0s, ${duration - 400}ms`;
+
+  banner.innerHTML = `
+    <div class="aviator-cashout-info">
+      <span class="aviator-cashout-label">You have cashed out!</span>
+      <span class="aviator-cashout-mult">${multiplier.toFixed(2)}x</span>
+    </div>
+    <div class="aviator-cashout-badge">
+      <span class="aviator-cashout-stars">★</span>
+      <div class="aviator-cashout-amount-box">
+        <span class="aviator-cashout-win-lbl">Win KES</span>
+        <span class="aviator-cashout-win-val">${winnings.toFixed(2)}</span>
+      </div>
+      <span class="aviator-cashout-stars">★</span>
+    </div>
+    <button class="aviator-cashout-close" onclick="this.parentElement.remove()">&times;</button>
+  `;
+  
+  container.appendChild(banner);
+  
+  setTimeout(() => {
+    if (banner.parentNode) {
+      banner.remove();
+    }
+  }, duration);
+}
+
+
 
 // ==========================================================================
 // SECRET ADMIN CONTROL CENTER
