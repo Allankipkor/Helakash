@@ -863,7 +863,7 @@ function cashOutConsoleBet(consoleId, multiplier) {
     btn.disabled = true;
   }
   
-  showAviatorCashoutBanner(multiplier, winnings);
+  showCashoutToast(multiplier, winnings, false);
 }
 
 
@@ -1037,7 +1037,7 @@ function cashoutMinesGame() {
   updateBalanceUI();
   
   addTransaction('Mines Win', payout, 'Success');
-  alert(`🎉 CASHOUT SUCCESSFUL! You earned KES ${payout.toFixed(2)} (x${minesMultiplier.toFixed(2)} multiplier)`);
+  showCashoutToast(minesMultiplier, payout, true);
   
   isMinesActive = false;
   resetMinesBoardUI();
@@ -1857,43 +1857,32 @@ function showToast(message, type = 'success', duration = 4000) {
   }, duration);
 }
 
-function showAviatorCashoutBanner(multiplier, winnings) {
-  const container = document.getElementById("toastPopupContainer");
+function showCashoutToast(multiplier, winnings, isMines = false) {
+  const container = document.getElementById("toastContainer");
   if (!container) return;
 
-  // Clear existing banners if any, to prevent stacking
-  container.innerHTML = "";
-
-  const banner = document.createElement("div");
-  banner.className = "aviator-cashout-banner";
+  const toast = document.createElement("div");
+  toast.className = "toast success-toast";
   
-  const duration = 5000;
-  banner.style.animation = `banner-slide-down 0.4s cubic-bezier(0.16, 1, 0.3, 1) forwards, banner-fade-out 0.4s cubic-bezier(0.7, 0, 0.84, 0) forwards`;
-  banner.style.animationDelay = `0s, ${duration - 400}ms`;
+  const gameName = isMines ? "Mines" : "Aviator";
+  const icon = isMines ? "🎉" : "✈️";
 
-  banner.innerHTML = `
-    <div class="aviator-cashout-info">
-      <span class="aviator-cashout-label">You have cashed out!</span>
-      <span class="aviator-cashout-mult">${multiplier.toFixed(2)}x</span>
+  toast.innerHTML = `
+    <div class="toast-icon" style="background: rgba(16, 185, 129, 0.2); color: #10b981;">${icon}</div>
+    <div class="toast-body">
+      <div class="toast-title" style="color: #10b981; font-weight: 800; font-size: 11px;">YOU CASHED OUT!</div>
+      <div class="toast-desc" style="font-size: 10px;">Earned <strong>KES ${winnings.toFixed(2)}</strong> playing ${gameName} (x${multiplier.toFixed(2)})</div>
     </div>
-    <div class="aviator-cashout-badge">
-      <span class="aviator-cashout-stars">★</span>
-      <div class="aviator-cashout-amount-box">
-        <span class="aviator-cashout-win-lbl">Win KES</span>
-        <span class="aviator-cashout-win-val">${winnings.toFixed(2)}</span>
-      </div>
-      <span class="aviator-cashout-stars">★</span>
-    </div>
-    <button class="aviator-cashout-close" onclick="this.parentElement.remove()">&times;</button>
   `;
   
-  container.appendChild(banner);
+  container.appendChild(toast);
   
   setTimeout(() => {
-    if (banner.parentNode) {
-      banner.remove();
-    }
-  }, duration);
+    toast.classList.add("removing");
+    setTimeout(() => {
+      toast.remove();
+    }, 400);
+  }, 5000);
 }
 
 
