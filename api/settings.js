@@ -30,28 +30,48 @@ export default async function handler(req, res) {
         const depositsQuery = await sql`
           SELECT id, phone, amount, reference, created_at 
           FROM helakash_transactions 
-          WHERE (type ILIKE '%Deposit%') AND (status = 'Success') 
+          WHERE (type ILIKE '%Deposit%') AND (status ILIKE '%success%') 
           ORDER BY created_at DESC, id DESC 
           LIMIT 50;
         `;
         const deposits = depositsQuery.rows.map(d => {
           let isoDate = '';
+          let timeFormatted = '';
+          let dt = null;
+
           if (d.created_at instanceof Date) {
-            isoDate = d.created_at.toISOString();
+            dt = d.created_at;
+            isoDate = dt.toISOString();
           } else if (d.created_at) {
-            const dt = new Date(d.created_at);
+            dt = new Date(d.created_at);
             isoDate = isNaN(dt.getTime()) ? String(d.created_at) : dt.toISOString();
           } else {
-            isoDate = new Date().toISOString();
+            dt = new Date();
+            isoDate = dt.toISOString();
+          }
+
+          if (dt && !isNaN(dt.getTime())) {
+            try {
+              timeFormatted = dt.toLocaleTimeString('en-GB', {
+                timeZone: 'Africa/Nairobi',
+                hour: '2-digit',
+                minute: '2-digit',
+                hour12: false
+              });
+            } catch (e) {
+              timeFormatted = dt.toISOString().substring(11, 16);
+            }
           }
 
           return {
             id: d.id,
             phone: d.phone,
             amount: parseFloat(d.amount),
-            reference: d.reference,
+            reference: d.reference || '',
             created_at: isoDate,
-            date: isoDate
+            date: isoDate,
+            time: timeFormatted,
+            raw_time: d.created_at
           };
         });
 

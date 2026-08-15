@@ -2029,76 +2029,81 @@ function switchAdminTab(tabName) {
   }
 }
 
-// Format admin deposit timestamp with accurate local real-time and relative indicator
-function formatAdminDepositTime(dateVal) {
-  if (!dateVal) return { timeStr: "Just now", relative: "Just now" };
-  const d = new Date(dateVal);
-  if (isNaN(d.getTime())) return { timeStr: String(dateVal), relative: "" };
-  
-  const now = new Date();
-  const diffSec = Math.max(0, Math.floor((now - d) / 1000));
-  
-  let relative = "";
-  if (diffSec < 10) {
-    relative = "Just now";
-  } else if (diffSec < 60) {
-    relative = `${diffSec}s ago`;
-  } else if (diffSec < 3600) {
-    const mins = Math.floor(diffSec / 60);
-    relative = `${mins}m ago`;
-  } else if (diffSec < 86400) {
-    const hours = Math.floor(diffSec / 3600);
-    relative = `${hours}h ago`;
-  } else {
-    const days = Math.floor(diffSec / 86400);
-    relative = `${days}d ago`;
+// Format admin deposit phone number (e.g. 0746568134, 0114468686)
+function formatAdminDepositPhone(phone) {
+  if (!phone) return '0700000000';
+  let p = String(phone).trim();
+  if (p.startsWith('254') && p.length === 12) {
+    return '0' + p.substring(3);
   }
-
-  // Format real-time local date and time with seconds
-  const timeStr = d.toLocaleDateString('en-GB', {
-    day: '2-digit',
-    month: 'short',
-    year: 'numeric'
-  }) + ' • ' + d.toLocaleTimeString([], {
-    hour: '2-digit',
-    minute: '2-digit',
-    second: '2-digit',
-    hour12: true
-  });
-
-  return { timeStr, relative };
+  if (p.startsWith('+254')) {
+    return '0' + p.substring(4);
+  }
+  return p;
 }
 
-// Render dynamic list of successful deposits in the admin control center
+// Format admin deposit amount (e.g. +300, +5)
+function formatAdminDepositAmount(amt) {
+  const num = parseFloat(amt);
+  if (isNaN(num)) return '+0';
+  return `+${num % 1 === 0 ? num : num.toFixed(2)}`;
+}
+
+// Format admin deposit timestamp (24-hour HH:mm matching DB deposit time)
+function formatAdminDepositTime(deposit) {
+  if (!deposit) return '--:--';
+  if (deposit.time) return deposit.time;
+  
+  const dateVal = deposit.created_at || deposit.date || deposit;
+  if (!dateVal) return '--:--';
+  
+  const d = new Date(dateVal);
+  if (isNaN(d.getTime())) {
+    if (typeof dateVal === 'string' && dateVal.includes(':')) {
+      const match = dateVal.match(/(\d{2}:\d{2})/);
+      if (match) return match[1];
+    }
+    return String(dateVal);
+  }
+  
+  try {
+    return d.toLocaleTimeString('en-GB', {
+      timeZone: 'Africa/Nairobi',
+      hour: '2-digit',
+      minute: '2-digit',
+      hour12: false
+    });
+  } catch (e) {
+    return d.toLocaleTimeString([], {
+      hour: '2-digit',
+      minute: '2-digit',
+      hour12: false
+    });
+  }
+}
+
+// Render dynamic list of successful deposits in the admin control center matching the screenshot table
 function renderAdminDepositsList(deposits) {
   const depListEl = document.getElementById("adminDepositsList");
   if (!depListEl) return;
   
   if (!deposits || deposits.length === 0) {
-    depListEl.innerHTML = '<div style="padding: 20px; text-align: center; color: var(--text-gray); font-size: 11px;">No successful deposits found.</div>';
+    depListEl.innerHTML = '<div style="padding: 24px 0; text-align: center; color: #8e9ba7; font-size: 12px;">No successful deposits found.</div>';
     return;
   }
 
   depListEl.innerHTML = deposits.map(d => {
-    const timeInfo = formatAdminDepositTime(d.created_at || d.date);
+    const formattedPhone = formatAdminDepositPhone(d.phone);
+    const formattedAmt = formatAdminDepositAmount(d.amount);
+    const ref = d.reference || 'N/A';
+    const formattedTime = formatAdminDepositTime(d);
+
     return `
-      <div style="display: flex; justify-content: space-between; align-items: center; padding: 8px 10px; border-bottom: 1px solid rgba(255,255,255,0.04); gap: 10px; transition: background 0.15s;" onmouseover="this.style.background='rgba(255,255,255,0.03)'" onmouseout="this.style.background='transparent'">
-        <div style="text-align: left; min-width: 0;">
-          <div style="display: flex; align-items: center; gap: 6px; margin-bottom: 2px;">
-            <span style="font-weight: 700; color: #fff; font-size: 12px; font-family: monospace;">${d.phone}</span>
-            <span style="background: rgba(16, 185, 129, 0.15); color: #10b981; border: 1px solid rgba(16, 185, 129, 0.3); border-radius: 4px; padding: 0 4px; font-size: 9px; font-weight: 700;">SUCCESS</span>
-          </div>
-          <div style="color: var(--text-gray); font-size: 10px; font-family: monospace; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 190px;">
-            Ref: <span style="color: rgba(255,255,255,0.7);">${d.reference || 'N/A'}</span>
-          </div>
-          <div style="display: flex; align-items: center; gap: 6px; margin-top: 2px; flex-wrap: wrap;">
-            <span style="color: rgba(255,255,255,0.45); font-size: 10px;">${timeInfo.timeStr}</span>
-            <span style="color: #f59e0b; font-size: 9px; font-weight: 700; background: rgba(245, 158, 11, 0.12); border: 1px solid rgba(245, 158, 11, 0.25); padding: 0 4px; border-radius: 3px;">${timeInfo.relative}</span>
-          </div>
-        </div>
-        <div style="text-align: right; flex-shrink: 0;">
-          <div style="font-weight: 800; color: #10b981; font-size: 13px; font-family: 'Outfit', sans-serif;">+KES ${d.amount.toFixed(2)}</div>
-        </div>
+      <div style="display: grid; grid-template-columns: 2.2fr 1.1fr 2.1fr 1fr; align-items: center; padding: 14px 0; border-bottom: 1px solid rgba(255,255,255,0.04); gap: 6px; font-family: inherit;">
+        <div style="font-weight: 700; color: #ffffff; font-size: 13px; font-family: monospace, inherit;">${formattedPhone}</div>
+        <div style="font-weight: 700; color: #10b981; font-size: 13px;">${formattedAmt}</div>
+        <div style="color: #94a3b8; font-size: 12px; font-family: monospace, inherit; letter-spacing: 0.3px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${ref}</div>
+        <div style="color: #8e9ba7; font-size: 12px; text-align: right; font-family: monospace, inherit;">${formattedTime}</div>
       </div>
     `;
   }).join('');
