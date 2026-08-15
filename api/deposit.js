@@ -100,8 +100,8 @@ export default async function handler(req, res) {
       `;
       // Log transaction in DB
       await sql`
-        INSERT INTO helakash_transactions (phone, type, amount, status, reference)
-        VALUES (${cleanAccountPhone}, 'Deposit', ${amount}, 'Success', ${reference});
+        INSERT INTO helakash_transactions (phone, type, amount, status, reference, created_at)
+        VALUES (${cleanAccountPhone}, 'Deposit', ${amount}, 'Success', ${reference}, CURRENT_TIMESTAMP);
       `;
     } catch (dbErr) {
       console.error("Database transaction logging failed:", dbErr.message);
@@ -137,8 +137,8 @@ export default async function handler(req, res) {
     `;
     // Log pending transaction in DB
     await sql`
-      INSERT INTO helakash_transactions (phone, type, amount, status, reference)
-      VALUES (${cleanAccountPhone}, 'Deposit', ${amount}, 'PENDING', ${reference});
+      INSERT INTO helakash_transactions (phone, type, amount, status, reference, created_at)
+      VALUES (${cleanAccountPhone}, 'Deposit', ${amount}, 'PENDING', ${reference}, CURRENT_TIMESTAMP);
     `;
 
     const auth = Buffer.from(`${username}:${password}`).toString('base64');

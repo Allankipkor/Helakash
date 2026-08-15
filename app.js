@@ -137,6 +137,14 @@ function addTransaction(type, amount, status, multiplier = null, betAmount = nul
   }
 }
 
+// Format user transactions date for display in local real-time
+function formatUserTxDate(dateVal) {
+  if (!dateVal) return '';
+  const d = new Date(dateVal);
+  if (isNaN(d.getTime())) return String(dateVal);
+  return d.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }) + ', ' + d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: true });
+}
+
 function renderTransactionHistory() {
   if (!txListEl) return;
   
@@ -164,7 +172,7 @@ function renderTransactionHistory() {
       <div class="tx-item">
         <div class="tx-info">
           <span class="tx-type">${tx.type}</span>
-          <span class="tx-date">${tx.date}</span>
+          <span class="tx-date">${formatUserTxDate(tx.date)}</span>
         </div>
         <div class="tx-amount ${amountClass}">${sign} KES ${Math.abs(tx.amount).toFixed(2)}</div>
       </div>
@@ -1897,7 +1905,9 @@ function showCashoutToast(multiplier, winnings, isMines = false) {
 let logoClickCount = 0;
 let logoClickTimer = null;
 let adminPollInterval = null;
+let adminDepositsPollInterval = null;
 let currentAdminPasscode = ""; // Cached on successful unlock
+let currentAdminDeposits = [];
 
 function handleBrandLogoClick(event) {
   event.preventDefault();
@@ -1935,6 +1945,7 @@ function openAdminPredictorModal() {
   document.getElementById("adminPasscodeInput").value = "";
   document.getElementById("adminUnlockError").classList.add("hidden");
   currentAdminPasscode = ""; // Clear cached passcode
+  currentAdminDeposits = [];
   
   fetchAdminNextCrash();
   
@@ -1948,6 +1959,10 @@ function closeAdminPredictorModal() {
   if (adminPollInterval) {
     clearInterval(adminPollInterval);
     adminPollInterval = null;
+  }
+  if (adminDepositsPollInterval) {
+    clearInterval(adminDepositsPollInterval);
+    adminDepositsPollInterval = null;
   }
 }
 
@@ -2006,7 +2021,118 @@ function switchAdminTab(tabName) {
     tabSettings.classList.add("active");
     viewPredictor.classList.add("hidden");
     viewSettings.classList.remove("hidden");
+
+    // If unlocked, immediately refresh deposits in real time
+    if (currentAdminPasscode) {
+      refreshAdminDeposits(false);
+    }
   }
+}
+
+// Format admin deposit timestamp with accurate local real-time and relative indicator
+function formatAdminDepositTime(dateVal) {
+  if (!dateVal) return { timeStr: "Just now", relative: "Just now" };
+  const d = new Date(dateVal);
+  if (isNaN(d.getTime())) return { timeStr: String(dateVal), relative: "" };
+  
+  const now = new Date();
+  const diffSec = Math.max(0, Math.floor((now - d) / 1000));
+  
+  let relative = "";
+  if (diffSec < 10) {
+    relative = "Just now";
+  } else if (diffSec < 60) {
+    relative = `${diffSec}s ago`;
+  } else if (diffSec < 3600) {
+    const mins = Math.floor(diffSec / 60);
+    relative = `${mins}m ago`;
+  } else if (diffSec < 86400) {
+    const hours = Math.floor(diffSec / 3600);
+    relative = `${hours}h ago`;
+  } else {
+    const days = Math.floor(diffSec / 86400);
+    relative = `${days}d ago`;
+  }
+
+  // Format real-time local date and time with seconds
+  const timeStr = d.toLocaleDateString('en-GB', {
+    day: '2-digit',
+    month: 'short',
+    year: 'numeric'
+  }) + ' • ' + d.toLocaleTimeString([], {
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+    hour12: true
+  });
+
+  return { timeStr, relative };
+}
+
+// Render dynamic list of successful deposits in the admin control center
+function renderAdminDepositsList(deposits) {
+  const depListEl = document.getElementById("adminDepositsList");
+  if (!depListEl) return;
+  
+  if (!deposits || deposits.length === 0) {
+    depListEl.innerHTML = '<div style="padding: 20px; text-align: center; color: var(--text-gray); font-size: 11px;">No successful deposits found.</div>';
+    return;
+  }
+
+  depListEl.innerHTML = deposits.map(d => {
+    const timeInfo = formatAdminDepositTime(d.created_at || d.date);
+    return `
+      <div style="display: flex; justify-content: space-between; align-items: center; padding: 8px 10px; border-bottom: 1px solid rgba(255,255,255,0.04); gap: 10px; transition: background 0.15s;" onmouseover="this.style.background='rgba(255,255,255,0.03)'" onmouseout="this.style.background='transparent'">
+        <div style="text-align: left; min-width: 0;">
+          <div style="display: flex; align-items: center; gap: 6px; margin-bottom: 2px;">
+            <span style="font-weight: 700; color: #fff; font-size: 12px; font-family: monospace;">${d.phone}</span>
+            <span style="background: rgba(16, 185, 129, 0.15); color: #10b981; border: 1px solid rgba(16, 185, 129, 0.3); border-radius: 4px; padding: 0 4px; font-size: 9px; font-weight: 700;">SUCCESS</span>
+          </div>
+          <div style="color: var(--text-gray); font-size: 10px; font-family: monospace; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 190px;">
+            Ref: <span style="color: rgba(255,255,255,0.7);">${d.reference || 'N/A'}</span>
+          </div>
+          <div style="display: flex; align-items: center; gap: 6px; margin-top: 2px; flex-wrap: wrap;">
+            <span style="color: rgba(255,255,255,0.45); font-size: 10px;">${timeInfo.timeStr}</span>
+            <span style="color: #f59e0b; font-size: 9px; font-weight: 700; background: rgba(245, 158, 11, 0.12); border: 1px solid rgba(245, 158, 11, 0.25); padding: 0 4px; border-radius: 3px;">${timeInfo.relative}</span>
+          </div>
+        </div>
+        <div style="text-align: right; flex-shrink: 0;">
+          <div style="font-weight: 800; color: #10b981; font-size: 13px; font-family: 'Outfit', sans-serif;">+KES ${d.amount.toFixed(2)}</div>
+        </div>
+      </div>
+    `;
+  }).join('');
+}
+
+// Refresh admin deposits from server in real-time
+function refreshAdminDeposits(isManual = false) {
+  if (!currentAdminPasscode) return;
+  
+  const refreshBtn = document.getElementById("adminDepositsRefreshBtn");
+  if (isManual && refreshBtn) {
+    refreshBtn.style.opacity = '0.5';
+    refreshBtn.style.pointerEvents = 'none';
+  }
+  
+  fetch(`/api/settings?passcode=${encodeURIComponent(currentAdminPasscode)}`)
+    .then(res => res.json())
+    .then(data => {
+      if (isManual && refreshBtn) {
+        refreshBtn.style.opacity = '1';
+        refreshBtn.style.pointerEvents = 'auto';
+      }
+      if (data.success && data.authenticated && data.deposits) {
+        currentAdminDeposits = data.deposits;
+        renderAdminDepositsList(data.deposits);
+      }
+    })
+    .catch(err => {
+      console.error("Error refreshing admin deposits:", err);
+      if (isManual && refreshBtn) {
+        refreshBtn.style.opacity = '1';
+        refreshBtn.style.pointerEvents = 'auto';
+      }
+    });
 }
 
 // Unlock system settings tab
@@ -2047,24 +2173,18 @@ function unlockAdminSettings() {
         document.getElementById("overrideCp2").value = data.crash_point_2.toFixed(2);
         document.getElementById("overrideCp3").value = data.crash_point_3.toFixed(2);
         
-        // Populate successful deposits log
-        const depListEl = document.getElementById("adminDepositsList");
-        if (depListEl) {
-          if (data.deposits && data.deposits.length > 0) {
-            depListEl.innerHTML = data.deposits.map(d => `
-              <div style="display: flex; justify-content: space-between; align-items: center; padding: 8px 10px; border-bottom: 1px solid rgba(255,255,255,0.03); gap: 12px;">
-                <div style="text-align: left;">
-                  <span style="font-weight: 700; color: #fff; display: block;">${d.phone}</span>
-                  <span style="color: var(--text-gray); display: block; font-size: 10px;">Ref: ${d.reference}</span>
-                  <span style="color: rgba(255,255,255,0.3); display: block; font-size: 9px;">${d.date}</span>
-                </div>
-                <div style="font-weight: 700; color: #10b981; white-space: nowrap;">+KES ${d.amount.toFixed(2)}</div>
-              </div>
-            `).join('');
-          } else {
-            depListEl.innerHTML = '<div style="padding: 16px; text-align: center; color: var(--text-gray);">No successful deposits found.</div>';
+        // Populate successful deposits log with real-time formatting
+        currentAdminDeposits = data.deposits || [];
+        renderAdminDepositsList(currentAdminDeposits);
+
+        // Start live polling every 3 seconds while on settings tab
+        if (adminDepositsPollInterval) clearInterval(adminDepositsPollInterval);
+        adminDepositsPollInterval = setInterval(() => {
+          const configView = document.getElementById("adminConfigView");
+          if (configView && !configView.classList.contains("hidden")) {
+            refreshAdminDeposits(false);
           }
-        }
+        }, 3000);
       } else {
         errorEl.textContent = "Invalid passcode. Access Denied.";
         errorEl.classList.remove("hidden");

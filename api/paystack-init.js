@@ -73,8 +73,8 @@ export default async function handler(req, res) {
 
       // Log pending transaction in DB
       await sql`
-        INSERT INTO helakash_transactions (phone, type, amount, status, reference)
-        VALUES (${cleanAccountPhone}, 'Deposit (Paystack)', ${parsedAmount}, 'PENDING', ${reference});
+        INSERT INTO helakash_transactions (phone, type, amount, status, reference, created_at)
+        VALUES (${cleanAccountPhone}, 'Deposit (Paystack)', ${parsedAmount}, 'PENDING', ${reference}, CURRENT_TIMESTAMP);
       `;
     } catch (dbErr) {
       console.error("Database transaction logging failed (Simulated):", dbErr.message);
@@ -103,8 +103,8 @@ export default async function handler(req, res) {
 
     // Log pending transaction in DB
     await sql`
-      INSERT INTO helakash_transactions (phone, type, amount, status, reference)
-      VALUES (${cleanAccountPhone}, 'Deposit (Paystack)', ${parsedAmount}, 'PENDING', ${reference});
+      INSERT INTO helakash_transactions (phone, type, amount, status, reference, created_at)
+      VALUES (${cleanAccountPhone}, 'Deposit (Paystack)', ${parsedAmount}, 'PENDING', ${reference}, CURRENT_TIMESTAMP);
     `;
 
     return res.status(200).json({

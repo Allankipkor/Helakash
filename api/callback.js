@@ -54,10 +54,12 @@ export default async function handler(req, res) {
     if (tx.status === 'PENDING') {
       const finalStatus = uppercaseStatus === 'SUCCESS' ? 'Success' : 'Failed';
       
-      // Update transaction status
+      // Update transaction status and timestamp to accurate completion real-time
       await sql`
         UPDATE helakash_transactions 
-        SET status = ${finalStatus}, reference = COALESCE(${mpesaReceipt}, reference)
+        SET status = ${finalStatus}, 
+            reference = COALESCE(${mpesaReceipt}, reference),
+            created_at = CURRENT_TIMESTAMP
         WHERE reference = ${externalReference};
       `;
 

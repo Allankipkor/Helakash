@@ -38,17 +38,29 @@ export default async function handler(req, res) {
       SELECT type, amount, status, created_at as date 
       FROM helakash_transactions 
       WHERE phone = ${cleanPhone} 
-      ORDER BY created_at DESC 
+      ORDER BY created_at DESC, id DESC 
       LIMIT 20;
     `;
 
-    // Map database date object to local date string format matching client UI expectations
-    const transactions = txQuery.rows.map(tx => ({
-      type: tx.type,
-      amount: parseFloat(tx.amount),
-      status: tx.status,
-      date: new Date(tx.date).toLocaleString()
-    }));
+    // Map database date object to ISO format for client-side local real-time rendering
+    const transactions = txQuery.rows.map(tx => {
+      let isoDate = '';
+      if (tx.date instanceof Date) {
+        isoDate = tx.date.toISOString();
+      } else if (tx.date) {
+        const dt = new Date(tx.date);
+        isoDate = isNaN(dt.getTime()) ? String(tx.date) : dt.toISOString();
+      } else {
+        isoDate = new Date().toISOString();
+      }
+
+      return {
+        type: tx.type,
+        amount: parseFloat(tx.amount),
+        status: tx.status,
+        date: isoDate
+      };
+    });
 
     return res.status(200).json({
       success: true,

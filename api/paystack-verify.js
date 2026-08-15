@@ -55,10 +55,11 @@ export default async function handler(req, res) {
       if (tx.status === 'PENDING') {
         const finalStatus = status === 'success' ? 'Success' : 'Failed';
 
-        // Update transaction status
+        // Update transaction status and timestamp
         await sql`
           UPDATE helakash_transactions 
-          SET status = ${finalStatus}
+          SET status = ${finalStatus},
+              created_at = CURRENT_TIMESTAMP
           WHERE reference = ${reference};
         `;
 
@@ -66,7 +67,7 @@ export default async function handler(req, res) {
           // Credit user balance
           await sql`
             UPDATE helakash_users 
-            SET balance = balance + ${amount}
+            SET balance = balance + ${amount} 
             WHERE phone = ${phone};
           `;
           console.log(`[Simulated] Credited KES ${amount} to user ${phone}`);
@@ -102,23 +103,25 @@ export default async function handler(req, res) {
             
             await sql`
               UPDATE helakash_transactions 
-              SET status = 'Failed'
+              SET status = 'Failed',
+                  created_at = CURRENT_TIMESTAMP
               WHERE reference = ${reference};
             `;
             return res.status(400).json({ error: 'Transaction amount mismatch.' });
           }
 
-          // Update status to success
+          // Update status to success and refresh timestamp
           await sql`
             UPDATE helakash_transactions 
-            SET status = 'Success'
+            SET status = 'Success',
+                created_at = CURRENT_TIMESTAMP
             WHERE reference = ${reference};
           `;
 
           // Credit balance
           await sql`
             UPDATE helakash_users 
-            SET balance = balance + ${amount}
+            SET balance = balance + ${amount} 
             WHERE phone = ${phone};
           `;
           console.log(`[Live] Credited KES ${amount} to user ${phone}`);
@@ -127,7 +130,8 @@ export default async function handler(req, res) {
         if (tx.status === 'PENDING') {
           await sql`
             UPDATE helakash_transactions 
-            SET status = 'Failed'
+            SET status = 'Failed',
+                created_at = CURRENT_TIMESTAMP
             WHERE reference = ${reference};
           `;
         }
@@ -144,16 +148,27 @@ export default async function handler(req, res) {
       SELECT type, amount, status, created_at as date 
       FROM helakash_transactions 
       WHERE phone = ${phone} 
-      ORDER BY created_at DESC 
+      ORDER BY created_at DESC, id DESC 
       LIMIT 20;
     `;
 
-    const transactions = txsQuery.rows.map(t => ({
-      type: t.type,
-      amount: parseFloat(t.amount),
-      status: t.status,
-      date: new Date(t.date).toLocaleString()
-    }));
+    const transactions = txsQuery.rows.map(t => {
+      let isoDate = '';
+      if (t.date instanceof Date) {
+        isoDate = t.date.toISOString();
+      } else if (t.date) {
+        const dt = new Date(t.date);
+        isoDate = isNaN(dt.getTime()) ? String(t.date) : dt.toISOString();
+      } else {
+        isoDate = new Date().toISOString();
+      }
+      return {
+        type: t.type,
+        amount: parseFloat(t.amount),
+        status: t.status,
+        date: isoDate
+      };
+    });
 
     return res.status(200).json({
       success: true,

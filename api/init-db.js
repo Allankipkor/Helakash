@@ -30,9 +30,18 @@ export default async function handler(req, res) {
         amount DECIMAL(12, 2) NOT NULL,
         status VARCHAR(20) DEFAULT 'PENDING',
         reference VARCHAR(100) UNIQUE,
-        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
       );
     `;
+
+    // Ensure TIMESTAMPTZ migration for existing tables
+    try {
+      await sql`
+        ALTER TABLE helakash_transactions ALTER COLUMN created_at TYPE TIMESTAMPTZ USING created_at AT TIME ZONE 'UTC';
+      `;
+    } catch (migErr) {
+      console.log("Migration notice for created_at:", migErr.message);
+    }
 
     // 3. Create helakash_webhook_logs table if not exists
     await sql`

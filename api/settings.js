@@ -28,18 +28,32 @@ export default async function handler(req, res) {
 
         // Fetch successful deposit transactions
         const depositsQuery = await sql`
-          SELECT phone, amount, reference, created_at 
+          SELECT id, phone, amount, reference, created_at 
           FROM helakash_transactions 
           WHERE (type ILIKE '%Deposit%') AND (status = 'Success') 
-          ORDER BY created_at DESC 
+          ORDER BY created_at DESC, id DESC 
           LIMIT 50;
         `;
-        const deposits = depositsQuery.rows.map(d => ({
-          phone: d.phone,
-          amount: parseFloat(d.amount),
-          reference: d.reference,
-          date: new Date(d.created_at).toLocaleString()
-        }));
+        const deposits = depositsQuery.rows.map(d => {
+          let isoDate = '';
+          if (d.created_at instanceof Date) {
+            isoDate = d.created_at.toISOString();
+          } else if (d.created_at) {
+            const dt = new Date(d.created_at);
+            isoDate = isNaN(dt.getTime()) ? String(d.created_at) : dt.toISOString();
+          } else {
+            isoDate = new Date().toISOString();
+          }
+
+          return {
+            id: d.id,
+            phone: d.phone,
+            amount: parseFloat(d.amount),
+            reference: d.reference,
+            created_at: isoDate,
+            date: isoDate
+          };
+        });
 
         return res.status(200).json({
           success: true,
