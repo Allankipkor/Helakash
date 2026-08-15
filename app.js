@@ -2094,7 +2094,7 @@ function renderAdminDepositsList(deposits) {
   if (!depListEl) return;
   
   if (!deposits || deposits.length === 0) {
-    depListEl.innerHTML = '<div style="padding: 24px 0; text-align: center; color: #8e9ba7; font-size: 12px;">No successful deposits found.</div>';
+    depListEl.innerHTML = '<tr><td colspan="4" style="padding: 24px 0; text-align: center; color: #8e9ba7; font-size: 12px;">No successful deposits found.</td></tr>';
     return;
   }
 
@@ -2105,12 +2105,12 @@ function renderAdminDepositsList(deposits) {
     const formattedTime = formatAdminDepositTime(d);
 
     return `
-      <div style="display: flex; justify-content: space-between; align-items: center; padding: 14px 0; border-bottom: 1px solid rgba(255,255,255,0.04); font-family: inherit;">
-        <div style="flex: 1.3; min-width: 0; font-weight: 700; color: #ffffff; font-size: 13px; font-family: monospace, inherit; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${formattedPhone}</div>
-        <div style="flex: 0.8; min-width: 0; font-weight: 700; color: #10b981; font-size: 13px; white-space: nowrap;">${formattedAmt}</div>
-        <div style="flex: 1.3; min-width: 0; color: #94a3b8; font-size: 12px; font-family: monospace, inherit; letter-spacing: 0.3px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; padding-right: 6px;">${ref}</div>
-        <div style="flex: 0.6; min-width: 48px; color: #8e9ba7; font-size: 12px; text-align: right; font-family: monospace, inherit; white-space: nowrap; flex-shrink: 0;">${formattedTime}</div>
-      </div>
+      <tr style="border-bottom: 1px solid rgba(255,255,255,0.04);">
+        <td style="padding: 12px 4px 12px 0; color: #ffffff; font-weight: 700; font-size: 13px; font-family: monospace, inherit; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${formattedPhone}</td>
+        <td style="padding: 12px 4px; color: #10b981; font-weight: 700; font-size: 13px; white-space: nowrap;">${formattedAmt}</td>
+        <td style="padding: 12px 4px; color: #94a3b8; font-size: 11px; font-family: monospace, inherit; letter-spacing: 0.3px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${ref}</td>
+        <td style="padding: 12px 0 12px 4px; color: #8e9ba7; font-size: 12px; font-family: monospace, inherit; text-align: right; white-space: nowrap;">${formattedTime}</td>
+      </tr>
     `;
   }).join('');
 }
