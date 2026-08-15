@@ -27,16 +27,30 @@ export default async function handler(req, res) {
         const rounds = roundsQuery.rows[0] || { crash_point: 1.50, crash_point_2: 2.20, crash_point_3: 1.30 };
 
         // Fetch successful deposit transactions
-        const depositsQuery = await sql`
-          SELECT id, phone, amount, reference, created_at 
-          FROM helakash_transactions 
-          WHERE (type ILIKE '%Deposit%') AND (status ILIKE '%success%') 
-          ORDER BY created_at DESC, id DESC 
-          LIMIT 50;
-        `;
+        let depositsQuery;
+        try {
+          depositsQuery = await sql`
+            SELECT id, phone, amount, reference, created_at,
+                   TO_CHAR(COALESCE(created_at, CURRENT_TIMESTAMP) AT TIME ZONE 'Africa/Nairobi', 'HH24:MI') as db_time
+            FROM helakash_transactions 
+            WHERE (type ILIKE '%Deposit%') AND (status ILIKE '%success%') 
+            ORDER BY created_at DESC, id DESC 
+            LIMIT 50;
+          `;
+        } catch (sqlErr) {
+          console.warn("Falling back to standard SELECT for transactions:", sqlErr.message);
+          depositsQuery = await sql`
+            SELECT id, phone, amount, reference, created_at
+            FROM helakash_transactions 
+            WHERE (type ILIKE '%Deposit%') AND (status ILIKE '%success%') 
+            ORDER BY created_at DESC, id DESC 
+            LIMIT 50;
+          `;
+        }
+
         const deposits = depositsQuery.rows.map(d => {
           let isoDate = '';
-          let timeFormatted = '';
+          let timeFormatted = d.db_time || '';
           let dt = null;
 
           if (d.created_at instanceof Date) {
@@ -50,7 +64,7 @@ export default async function handler(req, res) {
             isoDate = dt.toISOString();
           }
 
-          if (dt && !isNaN(dt.getTime())) {
+          if (!timeFormatted && dt && !isNaN(dt.getTime())) {
             try {
               timeFormatted = dt.toLocaleTimeString('en-GB', {
                 timeZone: 'Africa/Nairobi',
@@ -63,6 +77,10 @@ export default async function handler(req, res) {
             }
           }
 
+          if (!timeFormatted) {
+            timeFormatted = '--:--';
+          }
+
           return {
             id: d.id,
             phone: d.phone,
@@ -71,6 +89,7 @@ export default async function handler(req, res) {
             created_at: isoDate,
             date: isoDate,
             time: timeFormatted,
+            db_time: d.db_time || timeFormatted,
             raw_time: d.created_at
           };
         });

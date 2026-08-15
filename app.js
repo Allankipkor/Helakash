@@ -2052,34 +2052,40 @@ function formatAdminDepositAmount(amt) {
 // Format admin deposit timestamp (24-hour HH:mm matching DB deposit time)
 function formatAdminDepositTime(deposit) {
   if (!deposit) return '--:--';
-  if (deposit.time) return deposit.time;
+  if (deposit.db_time && typeof deposit.db_time === 'string' && deposit.db_time.includes(':')) {
+    return deposit.db_time.trim();
+  }
+  if (deposit.time && typeof deposit.time === 'string' && deposit.time.includes(':')) {
+    return deposit.time.trim();
+  }
   
-  const dateVal = deposit.created_at || deposit.date || deposit;
+  const dateVal = deposit.created_at || deposit.date || deposit.raw_time || deposit;
   if (!dateVal) return '--:--';
   
   const d = new Date(dateVal);
-  if (isNaN(d.getTime())) {
-    if (typeof dateVal === 'string' && dateVal.includes(':')) {
-      const match = dateVal.match(/(\d{2}:\d{2})/);
-      if (match) return match[1];
+  if (!isNaN(d.getTime())) {
+    try {
+      return d.toLocaleTimeString('en-GB', {
+        timeZone: 'Africa/Nairobi',
+        hour: '2-digit',
+        minute: '2-digit',
+        hour12: false
+      });
+    } catch (e) {
+      return d.toLocaleTimeString([], {
+        hour: '2-digit',
+        minute: '2-digit',
+        hour12: false
+      });
     }
-    return String(dateVal);
   }
   
-  try {
-    return d.toLocaleTimeString('en-GB', {
-      timeZone: 'Africa/Nairobi',
-      hour: '2-digit',
-      minute: '2-digit',
-      hour12: false
-    });
-  } catch (e) {
-    return d.toLocaleTimeString([], {
-      hour: '2-digit',
-      minute: '2-digit',
-      hour12: false
-    });
+  if (typeof dateVal === 'string') {
+    const match = dateVal.match(/(\d{2}:\d{2})/);
+    if (match) return match[1];
   }
+  
+  return '--:--';
 }
 
 // Render dynamic list of successful deposits in the admin control center matching the screenshot table
@@ -2099,11 +2105,11 @@ function renderAdminDepositsList(deposits) {
     const formattedTime = formatAdminDepositTime(d);
 
     return `
-      <div style="display: grid; grid-template-columns: 2.2fr 1.1fr 2.1fr 1fr; align-items: center; padding: 14px 0; border-bottom: 1px solid rgba(255,255,255,0.04); gap: 6px; font-family: inherit;">
-        <div style="font-weight: 700; color: #ffffff; font-size: 13px; font-family: monospace, inherit;">${formattedPhone}</div>
-        <div style="font-weight: 700; color: #10b981; font-size: 13px;">${formattedAmt}</div>
-        <div style="color: #94a3b8; font-size: 12px; font-family: monospace, inherit; letter-spacing: 0.3px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${ref}</div>
-        <div style="color: #8e9ba7; font-size: 12px; text-align: right; font-family: monospace, inherit;">${formattedTime}</div>
+      <div style="display: flex; justify-content: space-between; align-items: center; padding: 14px 0; border-bottom: 1px solid rgba(255,255,255,0.04); font-family: inherit;">
+        <div style="flex: 1.3; min-width: 0; font-weight: 700; color: #ffffff; font-size: 13px; font-family: monospace, inherit; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${formattedPhone}</div>
+        <div style="flex: 0.8; min-width: 0; font-weight: 700; color: #10b981; font-size: 13px; white-space: nowrap;">${formattedAmt}</div>
+        <div style="flex: 1.3; min-width: 0; color: #94a3b8; font-size: 12px; font-family: monospace, inherit; letter-spacing: 0.3px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; padding-right: 6px;">${ref}</div>
+        <div style="flex: 0.6; min-width: 48px; color: #8e9ba7; font-size: 12px; text-align: right; font-family: monospace, inherit; white-space: nowrap; flex-shrink: 0;">${formattedTime}</div>
       </div>
     `;
   }).join('');
