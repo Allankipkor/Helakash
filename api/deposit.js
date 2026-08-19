@@ -1,4 +1,4 @@
-import { sql, TABLES } from './db.js';
+import { query, APP_ID, TABLES } from './db.js';
 
 export default async function handler(req, res) {
   // Only allow POST requests
@@ -11,34 +11,24 @@ export default async function handler(req, res) {
     return res.status(400).json({ error: 'Amount and phone number are required.' });
   }
 
-  const cleanEnvVar = (val) => {
-    if (!val) return val;
-    let clean = val.trim();
-    if ((clean.startsWith('"') && clean.endsWith('"')) || (clean.startsWith("'") && clean.endsWith("'"))) {
-      clean = clean.slice(1, -1);
-    }
-    return clean.trim();
-  };
-
-  // Default fallback values
-  let minDeposit = 300;
-  let username = cleanEnvVar(process.env.PAYHERO_USERNAME);
-  let password = cleanEnvVar(process.env.PAYHERO_PASSWORD);
-  let channelId = cleanEnvVar(process.env.PAYHERO_CHANNEL_ID);
-  let callbackUrl = cleanEnvVar(process.env.PAYHERO_CALLBACK_URL);
+  let minDeposit = 300.00;
+  let username = null;
+  let password = null;
+  let channelId = null;
+  let callbackUrl = null;
 
   try {
-    const settingsQuery = await sql`SELECT * FROM ${TABLES.SETTINGS} WHERE id = 'global';`;
+    let settingsQuery = await query(`SELECT * FROM ${TABLES.settings} WHERE id = $1;`, [APP_ID]);
     if (settingsQuery.rows.length > 0) {
       const dbSettings = settingsQuery.rows[0];
-      minDeposit = parseFloat(dbSettings.min_deposit);
-      if (dbSettings.payhero_username) username = dbSettings.payhero_username;
-      if (dbSettings.payhero_password) password = dbSettings.payhero_password;
-      if (dbSettings.payhero_channel_id) channelId = dbSettings.payhero_channel_id;
-      if (dbSettings.payhero_callback_url) callbackUrl = dbSettings.payhero_callback_url;
+      minDeposit = parseFloat(dbSettings.min_deposit || 300.00);
+      username = dbSettings.payhero_username || null;
+      password = dbSettings.payhero_password || null;
+      channelId = dbSettings.payhero_channel_id || null;
+      callbackUrl = dbSettings.payhero_callback_url || null;
     }
   } catch (dbErr) {
-    console.error("Error reading settings in deposit.js:", dbErr);
+    console.error("Failed to fetch settings from DB in deposit.js:", dbErr.message);
   }
 
   if (parseInt(amount) < minDeposit) {
@@ -69,38 +59,57 @@ export default async function handler(req, res) {
   if (!/^254[71]\d{8}$/.test(cleanAccountPhone)) {
     return res.status(400).json({ error: 'Invalid account phone number format.' });
   }
-  if (!callbackUrl && req.headers && req.headers.host) {
-    const protocol = req.headers.host.includes('localhost') || req.headers.host.includes('127.0.0.1') ? 'http' : 'https';
-    callbackUrl = `${protocol}://${req.headers.host}/api/callback`;
+
+  const cleanEnvVar = (val) => {
+    if (!val) return val;
+    let clean = val.trim();
+    if ((clean.startsWith('"') && clean.endsWith('"')) || (clean.startsWith("'") && clean.endsWith("'"))) {
+      clean = clean.slice(1, -1);
+    }
+    return clean.trim();
+  };
+
+  // Fallback to env vars if database settings are not set
+  if (!username) username = cleanEnvVar(process.env.PAYHERO_USERNAME);
+  if (!password) password = cleanEnvVar(process.env.PAYHERO_PASSWORD);
+  if (!channelId) channelId = cleanEnvVar(process.env.PAYHERO_CHANNEL_ID);
+  if (!callbackUrl) {
+    callbackUrl = cleanEnvVar(process.env.PAYHERO_CALLBACK_URL);
+    if (!callbackUrl && req.headers && req.headers.host) {
+      const protocol = req.headers.host.includes('localhost') || req.headers.host.includes('127.0.0.1') ? 'http' : 'https';
+      callbackUrl = `${protocol}://${req.headers.host}/api/callback`;
+    }
   }
 
   // Fallback to SIMULATED mode if credentials are missing
   if (!username || !password || !channelId) {
     console.log("Pay Hero API credentials not configured. Running in SIMULATED mode.");
-    
+
     // Simulate network delay
     await new Promise(resolve => setTimeout(resolve, 1000));
 
-    const reference = `SIM-HK-${Date.now()}`;
+    const reference = `SIM-${APP_ID.toUpperCase()}-${Date.now()}`;
 
     try {
       // Ensure user exists in DB
-      await sql`
-        INSERT INTO ${TABLES.USERS} (phone, balance, password_hash)
-        VALUES (${cleanAccountPhone}, 0.00, 'NO_PASSWORD_MIGRATED')
+      await query(`
+        INSERT INTO ${TABLES.users} (phone, balance, password_hash)
+        VALUES ($1, 0.00, 'NO_PASSWORD_MIGRATED')
         ON CONFLICT (phone) DO NOTHING;
-      `;
+      `, [cleanAccountPhone]);
+
       // Update balance directly in simulated mode
-      await sql`
-        UPDATE ${TABLES.USERS}
-        SET balance = balance + ${parseFloat(amount)}
-        WHERE phone = ${cleanAccountPhone};
-      `;
+      await query(`
+        UPDATE ${TABLES.users}
+        SET balance = balance + $1
+        WHERE phone = $2;
+      `, [parseFloat(amount), cleanAccountPhone]);
+
       // Log transaction in DB
-      await sql`
-        INSERT INTO ${TABLES.TRANSACTIONS} (phone, type, amount, status, reference, created_at)
-        VALUES (${cleanAccountPhone}, 'Deposit', ${amount}, 'Success', ${reference}, CURRENT_TIMESTAMP);
-      `;
+      await query(`
+        INSERT INTO ${TABLES.transactions} (phone, type, amount, status, reference)
+        VALUES ($1, 'Deposit', $2, 'Success', $3);
+      `, [cleanAccountPhone, parseFloat(amount), reference]);
     } catch (dbErr) {
       console.error("Database transaction logging failed:", dbErr.message);
     }
@@ -114,7 +123,7 @@ export default async function handler(req, res) {
   }
 
   try {
-    const reference = `HK-${Date.now()}`;
+    const reference = `${APP_ID.toUpperCase()}-${Date.now()}`;
     const payload = {
       amount: parseInt(amount),
       phone_number: cleanPhone,
@@ -128,16 +137,17 @@ export default async function handler(req, res) {
     }
 
     // Ensure user exists in DB
-    await sql`
-      INSERT INTO ${TABLES.USERS} (phone, balance, password_hash)
-      VALUES (${cleanAccountPhone}, 0.00, 'NO_PASSWORD_MIGRATED')
+    await query(`
+      INSERT INTO ${TABLES.users} (phone, balance, password_hash)
+      VALUES ($1, 0.00, 'NO_PASSWORD_MIGRATED')
       ON CONFLICT (phone) DO NOTHING;
-    `;
+    `, [cleanAccountPhone]);
+
     // Log pending transaction in DB
-    await sql`
-      INSERT INTO ${TABLES.TRANSACTIONS} (phone, type, amount, status, reference, created_at)
-      VALUES (${cleanAccountPhone}, 'Deposit', ${amount}, 'PENDING', ${reference}, CURRENT_TIMESTAMP);
-    `;
+    await query(`
+      INSERT INTO ${TABLES.transactions} (phone, type, amount, status, reference)
+      VALUES ($1, 'Deposit', $2, 'PENDING', $3);
+    `, [cleanAccountPhone, parseFloat(amount), reference]);
 
     const auth = Buffer.from(`${username}:${password}`).toString('base64');
 
@@ -159,12 +169,12 @@ export default async function handler(req, res) {
 
     if (!response.ok) {
       // Mark transaction as failed in DB
-      await sql`
-        UPDATE ${TABLES.TRANSACTIONS} 
+      await query(`
+        UPDATE ${TABLES.transactions} 
         SET status = 'FAILED' 
-        WHERE reference = ${reference};
-      `;
-      
+        WHERE reference = $1;
+      `, [reference]);
+
       console.error("Pay Hero STK push failure response status:", response.status);
       console.error("Pay Hero STK push failure data:", data);
 
@@ -187,8 +197,6 @@ export default async function handler(req, res) {
 
       if (errorMessage.includes("merchant has insufficient balance")) {
         errorMessage = "The merchant's payment service wallet has insufficient float balance. Please contact the site administrator to top up the Pay Hero wallet.";
-      } else if (errorMessage.includes("sql: no rows in result set") || errorMessage.includes("NOT_FOUND")) {
-        errorMessage = "Invalid Payment Channel ID or Channel Not Found. Please check your Pay Hero Channel ID in Admin Settings.";
       }
 
       return res.status(response.status).json({ error: errorMessage });

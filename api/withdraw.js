@@ -1,4 +1,4 @@
-import { sql, TABLES } from './db.js';
+import { query, APP_ID, TABLES } from './db.js';
 
 export default async function handler(req, res) {
   if (req.method !== 'POST') {
@@ -10,14 +10,14 @@ export default async function handler(req, res) {
     return res.status(400).json({ error: 'Amount and phone number are required.' });
   }
 
-  let minWithdrawal = 500;
+  let minWithdrawal = 500.00;
   try {
-    const settingsQuery = await sql`SELECT min_withdrawal FROM ${TABLES.SETTINGS} WHERE id = 'global';`;
+    let settingsQuery = await query(`SELECT min_withdrawal FROM ${TABLES.settings} WHERE id = $1;`, [APP_ID]);
     if (settingsQuery.rows.length > 0) {
-      minWithdrawal = parseFloat(settingsQuery.rows[0].min_withdrawal);
+      minWithdrawal = parseFloat(settingsQuery.rows[0].min_withdrawal || 500.00);
     }
   } catch (dbErr) {
-    console.error("Error reading settings in withdraw.js:", dbErr);
+    console.error("Failed to fetch settings from DB in withdraw.js:", dbErr.message);
   }
 
   if (parseFloat(amount) < minWithdrawal) {
@@ -36,9 +36,9 @@ export default async function handler(req, res) {
   }
 
   try {
-    const userQuery = await sql`
-      SELECT balance FROM ${TABLES.USERS} WHERE phone = ${cleanPhone};
-    `;
+    const userQuery = await query(`
+      SELECT balance FROM ${TABLES.users} WHERE phone = $1;
+    `, [cleanPhone]);
 
     if (userQuery.rows.length === 0) {
       return res.status(404).json({ error: "User account not found." });
@@ -50,22 +50,22 @@ export default async function handler(req, res) {
     }
 
     // Deduct balance and log completed withdrawal transaction
-    await sql`
-      UPDATE ${TABLES.USERS} 
-      SET balance = balance - ${amount} 
-      WHERE phone = ${cleanPhone};
-    `;
+    await query(`
+      UPDATE ${TABLES.users} 
+      SET balance = balance - $1 
+      WHERE phone = $2;
+    `, [parseFloat(amount), cleanPhone]);
 
     const reference = `WD-${Date.now()}`;
-    await sql`
-      INSERT INTO ${TABLES.TRANSACTIONS} (phone, type, amount, status, reference)
-      VALUES (${cleanPhone}, 'Withdraw', ${-amount}, 'Completed', ${reference});
-    `;
+    await query(`
+      INSERT INTO ${TABLES.transactions} (phone, type, amount, status, reference)
+      VALUES ($1, 'Withdraw', $2, 'Completed', $3);
+    `, [cleanPhone, -parseFloat(amount), reference]);
 
     return res.status(200).json({
       success: true,
       message: "Withdrawal processed successfully",
-      newBalance: currentBalance - amount
+      newBalance: currentBalance - parseFloat(amount)
     });
   } catch (error) {
     console.error("Withdrawal error:", error);

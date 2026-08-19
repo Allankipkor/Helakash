@@ -1,4 +1,4 @@
-import { sql, TABLES } from './db.js';
+import { query, TABLES } from './db.js';
 
 export default async function handler(req, res) {
   // Pay Hero invokes callback via POST
@@ -14,16 +14,15 @@ export default async function handler(req, res) {
 
     // Log webhook payload to DB for debugging
     try {
-      await sql`
-        INSERT INTO ${TABLES.WEBHOOK_LOGS} (payload)
-        VALUES (${JSON.stringify(callbackData)});
-      `;
+      await query(`
+        INSERT INTO ${TABLES.webhook_logs} (payload)
+        VALUES ($1);
+      `, [JSON.stringify(callbackData)]);
     } catch (logErr) {
       console.error("Failed to log webhook to DB:", logErr.message);
     }
 
     // Extract parameters from Pay Hero webhook payload
-    // Handle both live webhook formats (nested inside 'response') and simulated manual webhooks
     const data = callbackData.response || callbackData;
     const status = data.Status || data.status || (data.ResultCode === 0 ? 'SUCCESS' : 'FAILED');
     const externalReference = data.ExternalReference || data.external_reference || data.MerchantRequestID;
@@ -37,10 +36,10 @@ export default async function handler(req, res) {
     const uppercaseStatus = status.toUpperCase();
 
     // 1. Fetch transaction to get phone and confirm it exists
-    const txQuery = await sql`
-      SELECT phone, amount, status FROM ${TABLES.TRANSACTIONS} 
-      WHERE reference = ${externalReference};
-    `;
+    const txQuery = await query(`
+      SELECT phone, amount, status FROM ${TABLES.transactions} 
+      WHERE reference = $1;
+    `, [externalReference]);
 
     if (txQuery.rows.length === 0) {
       return res.status(404).json({ error: `Transaction ${externalReference} not found in database` });
@@ -52,24 +51,22 @@ export default async function handler(req, res) {
     if (tx.status === 'PENDING') {
       const finalStatus = uppercaseStatus === 'SUCCESS' ? 'Success' : 'Failed';
       
-      // Update transaction status and timestamp to accurate completion real-time
-      await sql`
-        UPDATE ${TABLES.TRANSACTIONS} 
-        SET status = ${finalStatus}, 
-            reference = COALESCE(${mpesaReceipt}, reference),
-            created_at = CURRENT_TIMESTAMP
-        WHERE reference = ${externalReference};
-      `;
+      // Update transaction status
+      await query(`
+        UPDATE ${TABLES.transactions} 
+        SET status = $1, reference = COALESCE($2, reference)
+        WHERE reference = $3;
+      `, [finalStatus, mpesaReceipt || null, externalReference]);
 
       if (uppercaseStatus === 'SUCCESS') {
         const creditAmount = amount || parseFloat(tx.amount);
         
         // Update user balance
-        await sql`
-          UPDATE ${TABLES.USERS} 
-          SET balance = balance + ${creditAmount} 
-          WHERE phone = ${tx.phone};
-        `;
+        await query(`
+          UPDATE ${TABLES.users} 
+          SET balance = balance + $1 
+          WHERE phone = $2;
+        `, [creditAmount, tx.phone]);
         console.log(`Credited KES ${creditAmount} to user ${tx.phone} for transaction ${externalReference}`);
       }
     }

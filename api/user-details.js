@@ -1,9 +1,9 @@
-import { sql, TABLES } from './db.js';
+import { query, TABLES } from './db.js';
 
 export default async function handler(req, res) {
   // Allow GET or POST
   const phone = req.query.phone || (req.body && req.body.phone);
-
+  
   if (!phone) {
     return res.status(400).json({ error: "Phone number is required." });
   }
@@ -17,48 +17,32 @@ export default async function handler(req, res) {
   }
 
   try {
-    // 1. Fetch user
-    let userQuery = await sql`
-      SELECT balance FROM ${TABLES.USERS} WHERE phone = ${cleanPhone};
-    `;
+    // 1. Fetch user from this site's user table
+    const userQuery = await query(`
+      SELECT balance FROM ${TABLES.users} WHERE phone = $1;
+    `, [cleanPhone]);
 
     if (userQuery.rows.length === 0) {
-      return res.status(401).json({
-        success: false,
-        error: "User account not found."
-      });
+      return res.status(404).json({ success: false, error: 'User details not found or session invalid.' });
     }
 
     const balance = parseFloat(userQuery.rows[0].balance);
 
-    // 2. Fetch last 20 transactions
-    const txQuery = await sql`
+    // 2. Fetch last 20 transactions from this site's transactions table
+    const txQuery = await query(`
       SELECT type, amount, status, created_at as date 
-      FROM ${TABLES.TRANSACTIONS} 
-      WHERE phone = ${cleanPhone} 
-      ORDER BY created_at DESC, id DESC 
+      FROM ${TABLES.transactions} 
+      WHERE phone = $1 
+      ORDER BY created_at DESC 
       LIMIT 20;
-    `;
+    `, [cleanPhone]);
 
-    // Map database date object to ISO format for client-side local real-time rendering
-    const transactions = txQuery.rows.map(tx => {
-      let isoDate = '';
-      if (tx.date instanceof Date) {
-        isoDate = tx.date.toISOString();
-      } else if (tx.date) {
-        const dt = new Date(tx.date);
-        isoDate = isNaN(dt.getTime()) ? String(tx.date) : dt.toISOString();
-      } else {
-        isoDate = new Date().toISOString();
-      }
-
-      return {
-        type: tx.type,
-        amount: parseFloat(tx.amount),
-        status: tx.status,
-        date: isoDate
-      };
-    });
+    const transactions = txQuery.rows.map(tx => ({
+      type: tx.type,
+      amount: parseFloat(tx.amount),
+      status: tx.status,
+      date: new Date(tx.date).toLocaleString()
+    }));
 
     return res.status(200).json({
       success: true,

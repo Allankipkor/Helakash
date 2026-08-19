@@ -1,197 +1,182 @@
-import { sql, TABLES } from './db.js';
+import { query, APP_ID, TABLES } from './db.js';
 
 export default async function handler(req, res) {
-  const method = req.method;
+  // 1. GET Request
+  if (req.method === 'GET') {
+    const { passcode } = req.query;
 
-  if (method === 'GET') {
     try {
-      // 1. Fetch current settings from database
-      const settingsQuery = await sql`SELECT * FROM ${TABLES.SETTINGS} WHERE id = 'global';`;
+      // Fetch settings strictly for this specific app
+      let settingsQuery = await query(`
+        SELECT * FROM ${TABLES.settings} WHERE id = $1;
+      `, [APP_ID]);
+
       if (settingsQuery.rows.length === 0) {
-        return res.status(404).json({ error: 'Settings not found in database. Please run init-db.' });
+        // Fallback default if not seeded yet
+        return res.status(200).json({
+          authenticated: false,
+          app_id: APP_ID,
+          min_deposit: 300.00,
+          min_withdrawal: 500.00,
+          min_stake: 400.00
+        });
       }
 
-      const settings = settingsQuery.rows[0];
-      const { passcode } = req.query;
+      const dbSettings = settingsQuery.rows[0];
 
-      // 2. If valid admin passcode is provided, return all details (including credentials and crash points)
-      if (passcode && passcode === settings.admin_passcode) {
-        // Fetch current active rounds for global session
-        const roundsQuery = await sql`
-          SELECT crash_point, crash_point_2, crash_point_3 
-          FROM ${TABLES.ACTIVE_ROUNDS} 
-          WHERE phone = 'global';
-        `;
-        const rounds = roundsQuery.rows[0] || { crash_point: 1.50, crash_point_2: 2.20, crash_point_3: 1.30 };
+      // If correct passcode is supplied, return full credentials, predictor, and successful deposits
+      if (passcode && passcode === dbSettings.admin_passcode) {
+        // Fetch active round crash points for this app
+        let activeRoundQuery = await query(`
+          SELECT crash_point, crash_point_2, crash_point_3 FROM ${TABLES.active_rounds} WHERE phone = $1;
+        `, [APP_ID]);
 
-        // Fetch successful deposit transactions
-        let depositsQuery;
-        try {
-          depositsQuery = await sql`
-            SELECT id, phone, amount, reference, created_at,
-                   TO_CHAR(COALESCE(created_at, CURRENT_TIMESTAMP) AT TIME ZONE 'Africa/Nairobi', 'HH24:MI') as db_time
-            FROM ${TABLES.TRANSACTIONS} 
-            WHERE (type ILIKE '%Deposit%') AND (status ILIKE '%success%') 
-            ORDER BY created_at DESC, id DESC 
-            LIMIT 50;
-          `;
-        } catch (sqlErr) {
-          console.warn("Falling back to standard SELECT for transactions:", sqlErr.message);
-          depositsQuery = await sql`
-            SELECT id, phone, amount, reference, created_at
-            FROM ${TABLES.TRANSACTIONS} 
-            WHERE (type ILIKE '%Deposit%') AND (status ILIKE '%success%') 
-            ORDER BY created_at DESC, id DESC 
-            LIMIT 50;
-          `;
-        }
+        const activeRound = activeRoundQuery.rows[0] || { crash_point: 1.50, crash_point_2: 2.20, crash_point_3: 1.30 };
 
-        const deposits = depositsQuery.rows.map(d => {
-          let isoDate = '';
-          let timeFormatted = d.db_time || '';
-          let dt = null;
-
-          if (d.created_at instanceof Date) {
-            dt = d.created_at;
-            isoDate = dt.toISOString();
-          } else if (d.created_at) {
-            dt = new Date(d.created_at);
-            isoDate = isNaN(dt.getTime()) ? String(d.created_at) : dt.toISOString();
-          } else {
-            dt = new Date();
-            isoDate = dt.toISOString();
-          }
-
-          if (!timeFormatted && dt && !isNaN(dt.getTime())) {
-            try {
-              timeFormatted = dt.toLocaleTimeString('en-GB', {
-                timeZone: 'Africa/Nairobi',
-                hour: '2-digit',
-                minute: '2-digit',
-                hour12: false
-              });
-            } catch (e) {
-              timeFormatted = dt.toISOString().substring(11, 16);
-            }
-          }
-
-          if (!timeFormatted) {
-            timeFormatted = '--:--';
-          }
-
-          return {
-            id: d.id,
-            phone: d.phone,
-            amount: parseFloat(d.amount),
-            reference: d.reference || '',
-            created_at: isoDate,
-            date: isoDate,
-            time: timeFormatted,
-            db_time: d.db_time || timeFormatted,
-            raw_time: d.created_at
-          };
-        });
+        // Fetch last 50 successful deposits from this app's transactions
+        const depositsQuery = await query(`
+          SELECT phone, amount, reference, created_at FROM ${TABLES.transactions}
+          WHERE (LOWER(type) = 'deposit' OR LOWER(type) = 'mpesa deposit') AND LOWER(status) = 'success'
+          ORDER BY created_at DESC
+          LIMIT 50;
+        `);
 
         return res.status(200).json({
-          success: true,
           authenticated: true,
-          min_deposit: parseFloat(settings.min_deposit),
-          min_withdrawal: parseFloat(settings.min_withdrawal),
-          min_stake: parseFloat(settings.min_stake),
-          payhero_username: settings.payhero_username || '',
-          payhero_password: settings.payhero_password || '',
-          payhero_channel_id: settings.payhero_channel_id || '',
-          payhero_callback_url: settings.payhero_callback_url || '',
-          paystack_secret_key: settings.paystack_secret_key || '',
-          paystack_public_key: settings.paystack_public_key || '',
-          admin_passcode: settings.admin_passcode,
-          crash_point: parseFloat(rounds.crash_point),
-          crash_point_2: parseFloat(rounds.crash_point_2),
-          crash_point_3: parseFloat(rounds.crash_point_3),
-          deposits: deposits
+          app_id: APP_ID,
+          settings: {
+            min_deposit: parseFloat(dbSettings.min_deposit || 300.00),
+            min_withdrawal: parseFloat(dbSettings.min_withdrawal || 500.00),
+            min_stake: parseFloat(dbSettings.min_stake || 400.00),
+            payhero_username: dbSettings.payhero_username || '',
+            payhero_password: dbSettings.payhero_password || '',
+            payhero_channel_id: dbSettings.payhero_channel_id || '',
+            payhero_callback_url: dbSettings.payhero_callback_url || '',
+            admin_passcode: dbSettings.admin_passcode
+          },
+          predictor: {
+            crash_point: parseFloat(activeRound.crash_point),
+            crash_point_2: parseFloat(activeRound.crash_point_2),
+            crash_point_3: parseFloat(activeRound.crash_point_3)
+          },
+          deposits: depositsQuery.rows.map(row => ({
+            phone: row.phone,
+            amount: parseFloat(row.amount),
+            reference: row.reference,
+            created_at: row.created_at
+          }))
         });
       }
 
-      // 3. Otherwise, return only public parameters
+      // No passcode or wrong passcode — return only public limits
       return res.status(200).json({
-        success: true,
         authenticated: false,
-        min_deposit: parseFloat(settings.min_deposit),
-        min_withdrawal: parseFloat(settings.min_withdrawal),
-        min_stake: parseFloat(settings.min_stake)
+        app_id: APP_ID,
+        min_deposit: parseFloat(dbSettings.min_deposit || 300.00),
+        min_withdrawal: parseFloat(dbSettings.min_withdrawal || 500.00),
+        min_stake: parseFloat(dbSettings.min_stake || 400.00)
       });
-    } catch (error) {
-      console.error("Error fetching settings:", error);
-      return res.status(500).json({ error: error.message });
+
+    } catch (err) {
+      console.error("GET settings error:", err);
+      return res.status(500).json({ error: err.message });
     }
   }
 
-  if (method === 'POST') {
+  // 2. POST Request
+  if (req.method === 'POST') {
+    const {
+      passcode,
+      min_deposit,
+      min_withdrawal,
+      min_stake,
+      payhero_username,
+      payhero_password,
+      payhero_channel_id,
+      payhero_callback_url,
+      new_passcode,
+      crash_point,
+      crash_point_2,
+      crash_point_3
+    } = req.body;
+
+    if (!passcode) {
+      return res.status(403).json({ error: 'Authentication required. Admin passcode is missing.' });
+    }
+
     try {
-      const {
-        passcode,
-        min_deposit,
-        min_withdrawal,
-        min_stake,
-        payhero_username,
-        payhero_password,
-        payhero_channel_id,
-        payhero_callback_url,
-        paystack_secret_key,
-        paystack_public_key,
-        admin_passcode,
-        crash_point,
-        crash_point_2,
-        crash_point_3
-      } = req.body;
+      // Validate active passcode from DB
+      let settingsQuery = await query(`
+        SELECT admin_passcode FROM ${TABLES.settings} WHERE id = $1;
+      `, [APP_ID]);
 
-      // 1. Fetch settings to authenticate
-      const settingsQuery = await sql`SELECT admin_passcode FROM ${TABLES.SETTINGS} WHERE id = 'global';`;
       if (settingsQuery.rows.length === 0) {
-        return res.status(404).json({ error: 'Settings not initialized.' });
+        return res.status(500).json({ error: `Settings row not found for ${APP_ID}. Please initialize DB.` });
       }
 
-      const dbPasscode = settingsQuery.rows[0].admin_passcode;
-      if (!passcode || passcode !== dbPasscode) {
-        return res.status(403).json({ error: 'Unauthorized: Invalid admin passcode.' });
+      const activePasscode = settingsQuery.rows[0].admin_passcode;
+      if (passcode !== activePasscode) {
+        return res.status(403).json({ error: 'Invalid admin passcode.' });
       }
 
-      // 2. Handle updating settings if provided
-      if (min_deposit !== undefined) {
-        await sql`
-          UPDATE ${TABLES.SETTINGS}
-          SET min_deposit = ${parseFloat(min_deposit)},
-              min_withdrawal = ${parseFloat(min_withdrawal)},
-              min_stake = ${parseFloat(min_stake)},
-              payhero_username = ${payhero_username || null},
-              payhero_password = ${payhero_password || null},
-              payhero_channel_id = ${payhero_channel_id || null},
-              payhero_callback_url = ${payhero_callback_url || null},
-              paystack_secret_key = ${paystack_secret_key || null},
-              paystack_public_key = ${paystack_public_key || null},
-              admin_passcode = ${admin_passcode || dbPasscode}
-          WHERE id = 'global';
-        `;
+      // Perform updates if provided
+      if (min_deposit !== undefined || min_withdrawal !== undefined || min_stake !== undefined || payhero_username !== undefined || new_passcode !== undefined || payhero_callback_url !== undefined) {
+        const updatePasscode = new_passcode || activePasscode;
+        
+        // Ensure row exists for APP_ID
+        await query(`
+          INSERT INTO ${TABLES.settings} (id, min_deposit, min_withdrawal, min_stake, admin_passcode)
+          VALUES ($1, 300.00, 500.00, 400.00, $2)
+          ON CONFLICT (id) DO NOTHING;
+        `, [APP_ID, updatePasscode]);
+
+        await query(`
+          UPDATE ${TABLES.settings}
+          SET min_deposit = COALESCE($1, min_deposit),
+              min_withdrawal = COALESCE($2, min_withdrawal),
+              min_stake = COALESCE($3, min_stake),
+              payhero_username = COALESCE($4, payhero_username),
+              payhero_password = COALESCE($5, payhero_password),
+              payhero_channel_id = COALESCE($6, payhero_channel_id),
+              payhero_callback_url = COALESCE($7, payhero_callback_url),
+              admin_passcode = $8
+          WHERE id = $9;
+        `, [
+          min_deposit !== undefined ? parseFloat(min_deposit) : null,
+          min_withdrawal !== undefined ? parseFloat(min_withdrawal) : null,
+          min_stake !== undefined ? parseFloat(min_stake) : null,
+          payhero_username !== undefined ? payhero_username : null,
+          payhero_password !== undefined ? payhero_password : null,
+          payhero_channel_id !== undefined ? payhero_channel_id : null,
+          payhero_callback_url !== undefined ? payhero_callback_url : null,
+          updatePasscode,
+          APP_ID
+        ]);
       }
 
-      // 3. Handle updating active rounds / crash point overrides if provided
-      if (crash_point !== undefined) {
-        await sql`
-          INSERT INTO ${TABLES.ACTIVE_ROUNDS} (phone, crash_point, crash_point_2, crash_point_3, status)
-          VALUES ('global', ${parseFloat(crash_point)}, ${parseFloat(crash_point_2)}, ${parseFloat(crash_point_3)}, 'ACTIVE')
+      // Handle predictor outcome overrides
+      if (crash_point !== undefined || crash_point_2 !== undefined || crash_point_3 !== undefined) {
+        const cp1 = crash_point !== undefined ? parseFloat(crash_point) : null;
+        const cp2 = crash_point_2 !== undefined ? parseFloat(crash_point_2) : null;
+        const cp3 = crash_point_3 !== undefined ? parseFloat(crash_point_3) : null;
+
+        await query(`
+          INSERT INTO ${TABLES.active_rounds} (phone, crash_point, crash_point_2, crash_point_3, status, created_at)
+          VALUES ($1, COALESCE($2, 1.50), COALESCE($3, 2.20), COALESCE($4, 1.30), 'ACTIVE', NOW())
           ON CONFLICT (phone) DO UPDATE
-          SET crash_point = ${parseFloat(crash_point)},
-              crash_point_2 = ${parseFloat(crash_point_2)},
-              crash_point_3 = ${parseFloat(crash_point_3)},
+          SET crash_point = COALESCE($2, ${TABLES.active_rounds}.crash_point),
+              crash_point_2 = COALESCE($3, ${TABLES.active_rounds}.crash_point_2),
+              crash_point_3 = COALESCE($4, ${TABLES.active_rounds}.crash_point_3),
               status = 'ACTIVE',
               created_at = NOW();
-        `;
+        `, [APP_ID, cp1, cp2, cp3]);
       }
 
-      return res.status(200).json({ success: true, message: 'Settings updated successfully' });
-    } catch (error) {
-      console.error("Error updating settings:", error);
-      return res.status(500).json({ error: error.message });
+      return res.status(200).json({ success: true, message: `Settings for '${APP_ID}' updated successfully.` });
+
+    } catch (err) {
+      console.error("POST settings error:", err);
+      return res.status(500).json({ error: err.message });
     }
   }
 

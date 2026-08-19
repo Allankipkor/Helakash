@@ -1,4 +1,4 @@
-import { sql, TABLES } from './db.js';
+import { query, APP_ID, TABLES } from './db.js';
 
 export default async function handler(req, res) {
   if (req.method !== 'POST') {
@@ -10,20 +10,22 @@ export default async function handler(req, res) {
     return res.status(400).json({ error: 'Phone, type, and amount are required.' });
   }
 
-  // Load min stake setting from DB
-  let minStake = 400;
-  try {
-    const settingsQuery = await sql`SELECT min_stake FROM ${TABLES.SETTINGS} WHERE id = 'global';`;
-    if (settingsQuery.rows.length > 0) {
-      minStake = parseFloat(settingsQuery.rows[0].min_stake);
+  // Dynamic min stake check for Aviator
+  if (type.toLowerCase().includes('aviator')) {
+    let minStake = 400.00;
+    try {
+      let settingsQuery = await query(`SELECT min_stake FROM ${TABLES.settings} WHERE id = $1;`, [APP_ID]);
+      if (settingsQuery.rows.length > 0) {
+        minStake = parseFloat(settingsQuery.rows[0].min_stake || 400.00);
+      }
+    } catch (dbErr) {
+      console.error("Failed to fetch settings from DB in sync-game.js:", dbErr.message);
     }
-  } catch (dbErr) {
-    console.error("Error reading settings in sync-game.js:", dbErr);
-  }
 
-  // Validate bet amount if provided
-  if (betAmount !== undefined && parseFloat(betAmount) < minStake) {
-    return res.status(400).json({ error: `Minimum stake limit is KES ${minStake}.` });
+    const checkAmount = type.toLowerCase().includes('bet') ? Math.abs(parseFloat(amount)) : parseFloat(betAmount);
+    if (!isNaN(checkAmount) && checkAmount < minStake) {
+      return res.status(400).json({ error: `Minimum stake for Aviator is KES ${minStake}.` });
+    }
   }
 
   let cleanPhone = phone.replace(/\D/g, '');
@@ -36,12 +38,12 @@ export default async function handler(req, res) {
   // Security Check: If it is an Aviator Win transaction, validate client-side multiplier with server-side crash_point
   if (type.toLowerCase().includes('aviator win')) {
     try {
-      const activeRoundQuery = await sql`
+      const activeRoundQuery = await query(`
         SELECT crash_point, status, created_at,
                EXTRACT(EPOCH FROM (NOW() - created_at)) * 1000 AS elapsed_ms
-        FROM ${TABLES.ACTIVE_ROUNDS} 
-        WHERE phone = ${cleanPhone};
-      `;
+        FROM ${TABLES.active_rounds} 
+        WHERE phone = $1;
+      `, [cleanPhone]);
 
       if (activeRoundQuery.rows.length === 0) {
         return res.status(400).json({ error: "Game round already crashed or not active." });
@@ -74,11 +76,11 @@ export default async function handler(req, res) {
       }
 
       // Valid cashout. Set status to 'CASHED_OUT' to prevent double cashout
-      await sql`
-        UPDATE ${TABLES.ACTIVE_ROUNDS} 
+      await query(`
+        UPDATE ${TABLES.active_rounds} 
         SET status = 'CASHED_OUT' 
-        WHERE phone = ${cleanPhone};
-      `;
+        WHERE phone = $1;
+      `, [cleanPhone]);
     } catch (dbErr) {
       console.error("Database error during secure cashout check:", dbErr);
       return res.status(500).json({ error: "Database error during secure cashout verification." });
@@ -86,9 +88,9 @@ export default async function handler(req, res) {
   }
 
   try {
-    const userQuery = await sql`
-      SELECT balance FROM ${TABLES.USERS} WHERE phone = ${cleanPhone};
-    `;
+    const userQuery = await query(`
+      SELECT balance FROM ${TABLES.users} WHERE phone = $1;
+    `, [cleanPhone]);
 
     if (userQuery.rows.length === 0) {
       return res.status(404).json({ error: "User account not found." });
@@ -102,18 +104,18 @@ export default async function handler(req, res) {
     }
 
     // Update user balance
-    await sql`
-      UPDATE ${TABLES.USERS} 
-      SET balance = ${newBalance} 
-      WHERE phone = ${cleanPhone};
-    `;
+    await query(`
+      UPDATE ${TABLES.users} 
+      SET balance = $1 
+      WHERE phone = $2;
+    `, [newBalance, cleanPhone]);
 
     // Log game transaction
     const reference = `GM-${Date.now()}`;
-    await sql`
-      INSERT INTO ${TABLES.TRANSACTIONS} (phone, type, amount, status, reference)
-      VALUES (${cleanPhone}, ${type}, ${amount}, 'Success', ${reference});
-    `;
+    await query(`
+      INSERT INTO ${TABLES.transactions} (phone, type, amount, status, reference)
+      VALUES ($1, $2, $3, 'Success', $4);
+    `, [cleanPhone, type, parseFloat(amount), reference]);
 
     return res.status(200).json({
       success: true,

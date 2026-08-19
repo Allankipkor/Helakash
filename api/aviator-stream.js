@@ -1,4 +1,4 @@
-import { sql, TABLES } from './db.js';
+import { query, APP_ID, TABLES } from './db.js';
 
 export const config = {
   maxDuration: 60, // Maximum execution duration for Vercel functions (60s on Hobby tier)
@@ -34,29 +34,30 @@ export default async function handler(req, res) {
   let crashPoint, crashPoint2, crashPoint3, globalCreatedAt;
   
   try {
-    // 1. Fetch global active round
-    let globalQuery = await sql`
+    // 1. Fetch active round for this specific app
+    let globalQuery = await query(`
       SELECT crash_point, crash_point_2, crash_point_3, created_at,
              EXTRACT(EPOCH FROM (NOW() - created_at)) * 1000 AS elapsed_ms
-      FROM ${TABLES.ACTIVE_ROUNDS} 
-      WHERE phone = 'global';
-    `;
+      FROM ${TABLES.active_rounds} 
+      WHERE phone = $1;
+    `, [APP_ID]);
 
     if (globalQuery.rows.length === 0) {
-      // Create initial global round if missing
+      // Create initial round if missing
       crashPoint = generateCrashPoint();
       crashPoint2 = generateCrashPoint();
       crashPoint3 = generateCrashPoint();
-      await sql`
-        INSERT INTO ${TABLES.ACTIVE_ROUNDS} (phone, crash_point, crash_point_2, crash_point_3, status, created_at)
-        VALUES ('global', ${crashPoint}, ${crashPoint2}, ${crashPoint3}, 'ACTIVE', NOW());
-      `;
-      globalQuery = await sql`
+      await query(`
+        INSERT INTO ${TABLES.active_rounds} (phone, crash_point, crash_point_2, crash_point_3, status, created_at)
+        VALUES ($1, $2, $3, $4, 'ACTIVE', NOW());
+      `, [APP_ID, crashPoint, crashPoint2, crashPoint3]);
+
+      globalQuery = await query(`
         SELECT crash_point, crash_point_2, crash_point_3, created_at,
                EXTRACT(EPOCH FROM (NOW() - created_at)) * 1000 AS elapsed_ms
-        FROM ${TABLES.ACTIVE_ROUNDS} 
-        WHERE phone = 'global';
-      `;
+        FROM ${TABLES.active_rounds} 
+        WHERE phone = $1;
+      `, [APP_ID]);
     }
 
     let globalRow = globalQuery.rows[0];
@@ -65,7 +66,7 @@ export default async function handler(req, res) {
     crashPoint3 = parseFloat(globalRow.crash_point_3);
     const elapsedMs = parseFloat(globalRow.elapsed_ms);
 
-    // 2. Solve duration limits for the current global round
+    // 2. Solve duration limits for the current round
     const flightDurationLimit = Math.floor(7500 * Math.pow(crashPoint - 1.0, 1 / 1.2));
     const countdownDuration = 7500;
     const postCrashDuration = 3000;
@@ -73,27 +74,30 @@ export default async function handler(req, res) {
 
     let elapsedTotal = elapsedMs;
 
-    // 3. Shift the global round if it has expired
+    // 3. Shift the round if it has expired
     if (elapsedTotal >= totalRoundDuration) {
       const nextCp = generateCrashPoint();
-      await sql`
-        UPDATE ${TABLES.ACTIVE_ROUNDS}
+      await query(`
+        UPDATE ${TABLES.active_rounds}
         SET crash_point = crash_point_2,
             crash_point_2 = crash_point_3,
-            crash_point_3 = ${nextCp},
+            crash_point_3 = $1,
             status = 'ACTIVE',
             created_at = NOW()
-        WHERE phone = 'global'
-          AND EXTRACT(EPOCH FROM (NOW() - created_at)) * 1000 >= ${totalRoundDuration};
-      `;
+        WHERE phone = $2
+          AND EXTRACT(EPOCH FROM (NOW() - created_at)) * 1000 >= $3;
+      `, [nextCp, APP_ID, totalRoundDuration]);
 
-      // Re-read updated global round parameters (whether we updated it or a concurrent request did)
-      const reQuery = await sql`
+      // Re-read updated round parameters
+      const reQuery = await query(`
         SELECT crash_point, crash_point_2, crash_point_3, created_at,
                EXTRACT(EPOCH FROM (NOW() - created_at)) * 1000 AS elapsed_ms
-        FROM ${TABLES.ACTIVE_ROUNDS} 
-        WHERE phone = 'global';
-      `;
+        FROM ${TABLES.active_rounds} 
+        WHERE phone = $1
+        ORDER BY created_at DESC
+        LIMIT 1;
+      `, [APP_ID]);
+
       globalRow = reQuery.rows[0];
       crashPoint = parseFloat(globalRow.crash_point);
       crashPoint2 = parseFloat(globalRow.crash_point_2);
@@ -104,16 +108,16 @@ export default async function handler(req, res) {
     }
 
     // 4. Align individual user active round status in database
-    await sql`
-      INSERT INTO ${TABLES.ACTIVE_ROUNDS} (phone, crash_point, crash_point_2, crash_point_3, status, created_at)
-      VALUES (${cleanPhone}, ${crashPoint}, ${crashPoint2}, ${crashPoint3}, 'ACTIVE', ${globalRow.created_at})
+    await query(`
+      INSERT INTO ${TABLES.active_rounds} (phone, crash_point, crash_point_2, crash_point_3, status, created_at)
+      VALUES ($1, $2, $3, $4, 'ACTIVE', $5)
       ON CONFLICT (phone) DO UPDATE 
-      SET crash_point = ${crashPoint},
-          crash_point_2 = ${crashPoint2},
-          crash_point_3 = ${crashPoint3},
+      SET crash_point = $2,
+          crash_point_2 = $3,
+          crash_point_3 = $4,
           status = 'ACTIVE',
-          created_at = ${globalRow.created_at};
-    `;
+          created_at = $5;
+    `, [cleanPhone, crashPoint, crashPoint2, crashPoint3, globalRow.created_at]);
 
   } catch (dbError) {
     console.error("DB error in aviator-stream initialization:", dbError);
@@ -123,13 +127,14 @@ export default async function handler(req, res) {
     globalCreatedAt = Date.now();
   }
 
-  console.log(`Starting secure synchronized Aviator stream for ${cleanPhone}. Crash limit: ${crashPoint.toFixed(2)}`);
+  console.log(`Starting secure synchronized Aviator stream for ${cleanPhone} on ${APP_ID}. Crash limit: ${crashPoint.toFixed(2)}`);
 
   // Set SSE Headers
   res.writeHead(200, {
     'Content-Type': 'text/event-stream',
     'Cache-Control': 'no-cache, no-transform',
     'Connection': 'keep-alive',
+    'X-Accel-Buffering': 'no',
   });
 
   const sendEvent = (event, data) => {
@@ -141,12 +146,10 @@ export default async function handler(req, res) {
   const countdownDuration = 7500;
   const countdownInterval = 100;
   
-  // Calculate remaining waiting time based on elapsed total round time
   let countdownElapsed = Math.max(0, Date.now() - globalCreatedAt);
 
   const runWaiting = () => {
     return new Promise((resolve) => {
-      // If countdown has already passed, skip immediately
       if (countdownElapsed >= countdownDuration) {
         resolve(false);
         return;
@@ -187,7 +190,6 @@ export default async function handler(req, res) {
         const now = Date.now();
         const elapsedFlight = now - (globalCreatedAt + countdownDuration);
 
-        // If flight duration limit is reached, crash the plane
         if (elapsedFlight >= flightDurationLimit) {
           clearInterval(interval);
           sendEvent('crashed', { multiplier: crashPoint });
@@ -198,10 +200,9 @@ export default async function handler(req, res) {
         }
 
         if (elapsedFlight <= 0) {
-          return; // Still transitioning from waiting to flight
+          return;
         }
 
-        // Growth formula matching client
         const currentMult = 1.0 + Math.pow(elapsedFlight / 7500, 1.2);
 
         if (currentMult >= crashPoint) {
@@ -211,7 +212,6 @@ export default async function handler(req, res) {
           res.end();
           resolve(false);
         } else {
-          // Send elapsed time so client can synchronize animations perfectly
           sendEvent('tick', { multiplier: currentMult, elapsed: elapsedFlight });
         }
       }, tickInterval);
@@ -232,11 +232,11 @@ export default async function handler(req, res) {
 
 async function cleanUpRound(phone) {
   try {
-    await sql`
-      UPDATE ${TABLES.ACTIVE_ROUNDS} 
+    await query(`
+      UPDATE ${TABLES.active_rounds} 
       SET status = 'CRASHED' 
-      WHERE phone = ${phone};
-    `;
+      WHERE phone = $1;
+    `, [phone]);
     console.log(`Marked active round as CRASHED for ${phone}`);
   } catch (error) {
     console.error("DB update error in stream cleanup:", error);

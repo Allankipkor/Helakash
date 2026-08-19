@@ -1,4 +1,4 @@
-import { sql, TABLES } from './db.js';
+import { query, APP_ID, TABLES } from './db.js';
 
 export default async function handler(req, res) {
   if (req.method !== 'GET') {
@@ -22,9 +22,10 @@ export default async function handler(req, res) {
   }
 
   try {
-    const result = await sql`
-      SELECT crash_point, crash_point_2, crash_point_3 FROM ${TABLES.ACTIVE_ROUNDS} WHERE phone = 'global';
-    `;
+    // Check active round for this app
+    let result = await query(`
+      SELECT crash_point, crash_point_2, crash_point_3 FROM ${TABLES.active_rounds} WHERE phone = $1;
+    `, [APP_ID]);
 
     if (result.rows.length === 0) {
       return res.status(404).json({ error: 'No active round found for this session.' });
@@ -33,6 +34,7 @@ export default async function handler(req, res) {
     const row = result.rows[0];
     return res.status(200).json({
       success: true,
+      app_id: APP_ID,
       phone: cleanPhone,
       crash_point: parseFloat(row.crash_point),
       crash_point_2: parseFloat(row.crash_point_2),
