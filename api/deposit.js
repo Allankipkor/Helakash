@@ -189,6 +189,8 @@ export default async function handler(req, res) {
 
       if (errorMessage.includes("merchant has insufficient balance")) {
         errorMessage = "The merchant's payment service wallet has insufficient float balance. Please contact the site administrator to top up the Pay Hero wallet.";
+      } else if (errorMessage.includes("sql: no rows in result set") || errorMessage.includes("NOT_FOUND")) {
+        errorMessage = "Invalid Payment Channel ID or Channel Not Found. Please check your Pay Hero Channel ID in Admin Settings.";
       }
 
       return res.status(response.status).json({ error: errorMessage });
