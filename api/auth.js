@@ -1,7 +1,5 @@
-import { neon } from '@neondatabase/serverless';
+import { sql, TABLES } from './db.js';
 import crypto from 'crypto';
-
-const sql = neon(process.env.POSTGRES_URL || process.env.DATABASE_URL, { fullResults: true });
 
 export default async function handler(req, res) {
   if (req.method !== 'POST') {
@@ -35,7 +33,7 @@ export default async function handler(req, res) {
     if (action === 'login') {
       // 1. Fetch user from DB
       const userQuery = await sql`
-        SELECT phone, password_hash FROM helakash_users WHERE phone = ${cleanPhone};
+        SELECT phone, password_hash FROM ${TABLES.USERS} WHERE phone = ${cleanPhone};
       `;
 
       if (userQuery.rows.length === 0) {
@@ -63,7 +61,7 @@ export default async function handler(req, res) {
 
       // Check if user already exists
       const userQuery = await sql`
-        SELECT phone FROM helakash_users WHERE phone = ${cleanPhone};
+        SELECT phone FROM ${TABLES.USERS} WHERE phone = ${cleanPhone};
       `;
 
       if (userQuery.rows.length > 0) {
@@ -75,7 +73,7 @@ export default async function handler(req, res) {
 
       // Register user with a starting balance of 0.00 KES (production real money mode)
       await sql`
-        INSERT INTO helakash_users (phone, password_hash, balance)
+        INSERT INTO ${TABLES.USERS} (phone, password_hash, balance)
         VALUES (${cleanPhone}, ${passwordHash}, 0.00);
       `;
 

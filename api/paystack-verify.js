@@ -1,6 +1,4 @@
-import { neon } from '@neondatabase/serverless';
-
-const sql = neon(process.env.POSTGRES_URL || process.env.DATABASE_URL, { fullResults: true });
+import { sql, TABLES } from './db.js';
 
 export default async function handler(req, res) {
   // Allow POST or GET for verification flexibility
@@ -23,13 +21,13 @@ export default async function handler(req, res) {
   let secretKey = cleanEnvVar(process.env.PAYSTACK_SECRET_KEY);
 
   try {
-    const settingsQuery = await sql`SELECT paystack_secret_key FROM helakash_settings WHERE id = 'global';`;
+    const settingsQuery = await sql`SELECT paystack_secret_key FROM ${TABLES.SETTINGS} WHERE id = 'global';`;
     if (settingsQuery.rows.length > 0) {
       const dbSettings = settingsQuery.rows[0];
       if (dbSettings.paystack_secret_key) secretKey = dbSettings.paystack_secret_key;
     }
   } catch (dbErr) {
-    console.error("Error reading helakash_settings in paystack-verify.js:", dbErr);
+    console.error("Error reading settings in paystack-verify.js:", dbErr);
   }
 
   // Check if simulated reference
@@ -38,7 +36,7 @@ export default async function handler(req, res) {
   try {
     // 1. Fetch current transaction details
     const txQuery = await sql`
-      SELECT phone, amount, status FROM helakash_transactions 
+      SELECT phone, amount, status FROM ${TABLES.TRANSACTIONS} 
       WHERE reference = ${reference};
     `;
 
@@ -57,7 +55,7 @@ export default async function handler(req, res) {
 
         // Update transaction status and timestamp
         await sql`
-          UPDATE helakash_transactions 
+          UPDATE ${TABLES.TRANSACTIONS} 
           SET status = ${finalStatus},
               created_at = CURRENT_TIMESTAMP
           WHERE reference = ${reference};
@@ -66,7 +64,7 @@ export default async function handler(req, res) {
         if (finalStatus === 'Success') {
           // Credit user balance
           await sql`
-            UPDATE helakash_users 
+            UPDATE ${TABLES.USERS} 
             SET balance = balance + ${amount} 
             WHERE phone = ${phone};
           `;
@@ -102,7 +100,7 @@ export default async function handler(req, res) {
             console.error(`Paystack verified amount KES ${paystackAmount} does not match DB amount KES ${amount}`);
             
             await sql`
-              UPDATE helakash_transactions 
+              UPDATE ${TABLES.TRANSACTIONS} 
               SET status = 'Failed',
                   created_at = CURRENT_TIMESTAMP
               WHERE reference = ${reference};
@@ -112,7 +110,7 @@ export default async function handler(req, res) {
 
           // Update status to success and refresh timestamp
           await sql`
-            UPDATE helakash_transactions 
+            UPDATE ${TABLES.TRANSACTIONS} 
             SET status = 'Success',
                 created_at = CURRENT_TIMESTAMP
             WHERE reference = ${reference};
@@ -120,7 +118,7 @@ export default async function handler(req, res) {
 
           // Credit balance
           await sql`
-            UPDATE helakash_users 
+            UPDATE ${TABLES.USERS} 
             SET balance = balance + ${amount} 
             WHERE phone = ${phone};
           `;
@@ -129,7 +127,7 @@ export default async function handler(req, res) {
       } else {
         if (tx.status === 'PENDING') {
           await sql`
-            UPDATE helakash_transactions 
+            UPDATE ${TABLES.TRANSACTIONS} 
             SET status = 'Failed',
                 created_at = CURRENT_TIMESTAMP
             WHERE reference = ${reference};
@@ -140,13 +138,13 @@ export default async function handler(req, res) {
 
     // 2. Fetch updated balance and transaction history to return to client
     const userQuery = await sql`
-      SELECT balance FROM helakash_users WHERE phone = ${phone};
+      SELECT balance FROM ${TABLES.USERS} WHERE phone = ${phone};
     `;
     const balance = parseFloat(userQuery.rows[0].balance);
 
     const txsQuery = await sql`
       SELECT type, amount, status, created_at as date 
-      FROM helakash_transactions 
+      FROM ${TABLES.TRANSACTIONS} 
       WHERE phone = ${phone} 
       ORDER BY created_at DESC, id DESC 
       LIMIT 20;

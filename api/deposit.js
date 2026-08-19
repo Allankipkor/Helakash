@@ -1,6 +1,4 @@
-import { neon } from '@neondatabase/serverless';
-
-const sql = neon(process.env.POSTGRES_URL || process.env.DATABASE_URL, { fullResults: true });
+import { sql, TABLES } from './db.js';
 
 export default async function handler(req, res) {
   // Only allow POST requests
@@ -30,7 +28,7 @@ export default async function handler(req, res) {
   let callbackUrl = cleanEnvVar(process.env.PAYHERO_CALLBACK_URL);
 
   try {
-    const settingsQuery = await sql`SELECT * FROM helakash_settings WHERE id = 'global';`;
+    const settingsQuery = await sql`SELECT * FROM ${TABLES.SETTINGS} WHERE id = 'global';`;
     if (settingsQuery.rows.length > 0) {
       const dbSettings = settingsQuery.rows[0];
       minDeposit = parseFloat(dbSettings.min_deposit);
@@ -40,7 +38,7 @@ export default async function handler(req, res) {
       if (dbSettings.payhero_callback_url) callbackUrl = dbSettings.payhero_callback_url;
     }
   } catch (dbErr) {
-    console.error("Error reading helakash_settings in deposit.js:", dbErr);
+    console.error("Error reading settings in deposit.js:", dbErr);
   }
 
   if (parseInt(amount) < minDeposit) {
@@ -88,19 +86,19 @@ export default async function handler(req, res) {
     try {
       // Ensure user exists in DB
       await sql`
-        INSERT INTO helakash_users (phone, balance, password_hash)
+        INSERT INTO ${TABLES.USERS} (phone, balance, password_hash)
         VALUES (${cleanAccountPhone}, 0.00, 'NO_PASSWORD_MIGRATED')
         ON CONFLICT (phone) DO NOTHING;
       `;
       // Update balance directly in simulated mode
       await sql`
-        UPDATE helakash_users
+        UPDATE ${TABLES.USERS}
         SET balance = balance + ${parseFloat(amount)}
         WHERE phone = ${cleanAccountPhone};
       `;
       // Log transaction in DB
       await sql`
-        INSERT INTO helakash_transactions (phone, type, amount, status, reference, created_at)
+        INSERT INTO ${TABLES.TRANSACTIONS} (phone, type, amount, status, reference, created_at)
         VALUES (${cleanAccountPhone}, 'Deposit', ${amount}, 'Success', ${reference}, CURRENT_TIMESTAMP);
       `;
     } catch (dbErr) {
@@ -131,13 +129,13 @@ export default async function handler(req, res) {
 
     // Ensure user exists in DB
     await sql`
-      INSERT INTO helakash_users (phone, balance, password_hash)
+      INSERT INTO ${TABLES.USERS} (phone, balance, password_hash)
       VALUES (${cleanAccountPhone}, 0.00, 'NO_PASSWORD_MIGRATED')
       ON CONFLICT (phone) DO NOTHING;
     `;
     // Log pending transaction in DB
     await sql`
-      INSERT INTO helakash_transactions (phone, type, amount, status, reference, created_at)
+      INSERT INTO ${TABLES.TRANSACTIONS} (phone, type, amount, status, reference, created_at)
       VALUES (${cleanAccountPhone}, 'Deposit', ${amount}, 'PENDING', ${reference}, CURRENT_TIMESTAMP);
     `;
 
@@ -162,7 +160,7 @@ export default async function handler(req, res) {
     if (!response.ok) {
       // Mark transaction as failed in DB
       await sql`
-        UPDATE helakash_transactions 
+        UPDATE ${TABLES.TRANSACTIONS} 
         SET status = 'FAILED' 
         WHERE reference = ${reference};
       `;

@@ -1,6 +1,4 @@
-import { neon } from '@neondatabase/serverless';
-
-const sql = neon(process.env.POSTGRES_URL || process.env.DATABASE_URL, { fullResults: true });
+import { sql, TABLES } from './db.js';
 
 export default async function handler(req, res) {
   // Allow GET or POST
@@ -19,9 +17,9 @@ export default async function handler(req, res) {
   }
 
   try {
-    // 1. Fetch or create user
+    // 1. Fetch user
     let userQuery = await sql`
-      SELECT balance FROM helakash_users WHERE phone = ${cleanPhone};
+      SELECT balance FROM ${TABLES.USERS} WHERE phone = ${cleanPhone};
     `;
 
     if (userQuery.rows.length === 0) {
@@ -36,7 +34,7 @@ export default async function handler(req, res) {
     // 2. Fetch last 20 transactions
     const txQuery = await sql`
       SELECT type, amount, status, created_at as date 
-      FROM helakash_transactions 
+      FROM ${TABLES.TRANSACTIONS} 
       WHERE phone = ${cleanPhone} 
       ORDER BY created_at DESC, id DESC 
       LIMIT 20;

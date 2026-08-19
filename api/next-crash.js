@@ -1,6 +1,4 @@
-import { neon } from '@neondatabase/serverless';
-
-const sql = neon(process.env.POSTGRES_URL || process.env.DATABASE_URL, { fullResults: true });
+import { sql, TABLES } from './db.js';
 
 export default async function handler(req, res) {
   if (req.method !== 'GET') {
@@ -25,7 +23,7 @@ export default async function handler(req, res) {
 
   try {
     const result = await sql`
-      SELECT crash_point, crash_point_2, crash_point_3 FROM helakash_active_rounds WHERE phone = 'global';
+      SELECT crash_point, crash_point_2, crash_point_3 FROM ${TABLES.ACTIVE_ROUNDS} WHERE phone = 'global';
     `;
 
     if (result.rows.length === 0) {

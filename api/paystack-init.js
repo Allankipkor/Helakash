@@ -1,6 +1,4 @@
-import { neon } from '@neondatabase/serverless';
-
-const sql = neon(process.env.POSTGRES_URL || process.env.DATABASE_URL, { fullResults: true });
+import { sql, TABLES } from './db.js';
 
 export default async function handler(req, res) {
   // Only allow POST requests
@@ -27,7 +25,7 @@ export default async function handler(req, res) {
   let publicKey = cleanEnvVar(process.env.PAYSTACK_PUBLIC_KEY);
 
   try {
-    const settingsQuery = await sql`SELECT * FROM helakash_settings WHERE id = 'global';`;
+    const settingsQuery = await sql`SELECT * FROM ${TABLES.SETTINGS} WHERE id = 'global';`;
     if (settingsQuery.rows.length > 0) {
       const dbSettings = settingsQuery.rows[0];
       minDeposit = parseFloat(dbSettings.min_deposit);
@@ -35,7 +33,7 @@ export default async function handler(req, res) {
       if (dbSettings.paystack_public_key) publicKey = dbSettings.paystack_public_key;
     }
   } catch (dbErr) {
-    console.error("Error reading helakash_settings in paystack-init.js:", dbErr);
+    console.error("Error reading settings in paystack-init.js:", dbErr);
   }
 
   const parsedAmount = parseInt(amount);
@@ -66,14 +64,14 @@ export default async function handler(req, res) {
     try {
       // Ensure user exists in DB
       await sql`
-        INSERT INTO helakash_users (phone, balance, password_hash)
+        INSERT INTO ${TABLES.USERS} (phone, balance, password_hash)
         VALUES (${cleanAccountPhone}, 0.00, 'NO_PASSWORD_MIGRATED')
         ON CONFLICT (phone) DO NOTHING;
       `;
 
       // Log pending transaction in DB
       await sql`
-        INSERT INTO helakash_transactions (phone, type, amount, status, reference, created_at)
+        INSERT INTO ${TABLES.TRANSACTIONS} (phone, type, amount, status, reference, created_at)
         VALUES (${cleanAccountPhone}, 'Deposit (Paystack)', ${parsedAmount}, 'PENDING', ${reference}, CURRENT_TIMESTAMP);
       `;
     } catch (dbErr) {
@@ -96,14 +94,14 @@ export default async function handler(req, res) {
 
     // Ensure user exists in DB
     await sql`
-      INSERT INTO helakash_users (phone, balance, password_hash)
+      INSERT INTO ${TABLES.USERS} (phone, balance, password_hash)
       VALUES (${cleanAccountPhone}, 0.00, 'NO_PASSWORD_MIGRATED')
       ON CONFLICT (phone) DO NOTHING;
     `;
 
     // Log pending transaction in DB
     await sql`
-      INSERT INTO helakash_transactions (phone, type, amount, status, reference, created_at)
+      INSERT INTO ${TABLES.TRANSACTIONS} (phone, type, amount, status, reference, created_at)
       VALUES (${cleanAccountPhone}, 'Deposit (Paystack)', ${parsedAmount}, 'PENDING', ${reference}, CURRENT_TIMESTAMP);
     `;
 

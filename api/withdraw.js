@@ -1,6 +1,4 @@
-import { neon } from '@neondatabase/serverless';
-
-const sql = neon(process.env.POSTGRES_URL || process.env.DATABASE_URL, { fullResults: true });
+import { sql, TABLES } from './db.js';
 
 export default async function handler(req, res) {
   if (req.method !== 'POST') {
@@ -14,12 +12,12 @@ export default async function handler(req, res) {
 
   let minWithdrawal = 500;
   try {
-    const settingsQuery = await sql`SELECT min_withdrawal FROM helakash_settings WHERE id = 'global';`;
+    const settingsQuery = await sql`SELECT min_withdrawal FROM ${TABLES.SETTINGS} WHERE id = 'global';`;
     if (settingsQuery.rows.length > 0) {
       minWithdrawal = parseFloat(settingsQuery.rows[0].min_withdrawal);
     }
   } catch (dbErr) {
-    console.error("Error reading helakash_settings in withdraw.js:", dbErr);
+    console.error("Error reading settings in withdraw.js:", dbErr);
   }
 
   if (parseFloat(amount) < minWithdrawal) {
@@ -39,7 +37,7 @@ export default async function handler(req, res) {
 
   try {
     const userQuery = await sql`
-      SELECT balance FROM helakash_users WHERE phone = ${cleanPhone};
+      SELECT balance FROM ${TABLES.USERS} WHERE phone = ${cleanPhone};
     `;
 
     if (userQuery.rows.length === 0) {
@@ -53,14 +51,14 @@ export default async function handler(req, res) {
 
     // Deduct balance and log completed withdrawal transaction
     await sql`
-      UPDATE helakash_users 
+      UPDATE ${TABLES.USERS} 
       SET balance = balance - ${amount} 
       WHERE phone = ${cleanPhone};
     `;
 
     const reference = `WD-${Date.now()}`;
     await sql`
-      INSERT INTO helakash_transactions (phone, type, amount, status, reference)
+      INSERT INTO ${TABLES.TRANSACTIONS} (phone, type, amount, status, reference)
       VALUES (${cleanPhone}, 'Withdraw', ${-amount}, 'Completed', ${reference});
     `;
 

@@ -1,6 +1,4 @@
-import { neon } from '@neondatabase/serverless';
-
-const sql = neon(process.env.POSTGRES_URL || process.env.DATABASE_URL, { fullResults: true });
+import { sql, TABLES } from './db.js';
 
 export const config = {
   maxDuration: 60, // Maximum execution duration for Vercel functions (60s on Hobby tier)
@@ -40,7 +38,7 @@ export default async function handler(req, res) {
     let globalQuery = await sql`
       SELECT crash_point, crash_point_2, crash_point_3, created_at,
              EXTRACT(EPOCH FROM (NOW() - created_at)) * 1000 AS elapsed_ms
-      FROM helakash_active_rounds 
+      FROM ${TABLES.ACTIVE_ROUNDS} 
       WHERE phone = 'global';
     `;
 
@@ -50,13 +48,13 @@ export default async function handler(req, res) {
       crashPoint2 = generateCrashPoint();
       crashPoint3 = generateCrashPoint();
       await sql`
-        INSERT INTO helakash_active_rounds (phone, crash_point, crash_point_2, crash_point_3, status, created_at)
+        INSERT INTO ${TABLES.ACTIVE_ROUNDS} (phone, crash_point, crash_point_2, crash_point_3, status, created_at)
         VALUES ('global', ${crashPoint}, ${crashPoint2}, ${crashPoint3}, 'ACTIVE', NOW());
       `;
       globalQuery = await sql`
         SELECT crash_point, crash_point_2, crash_point_3, created_at,
                EXTRACT(EPOCH FROM (NOW() - created_at)) * 1000 AS elapsed_ms
-        FROM helakash_active_rounds 
+        FROM ${TABLES.ACTIVE_ROUNDS} 
         WHERE phone = 'global';
       `;
     }
@@ -78,8 +76,8 @@ export default async function handler(req, res) {
     // 3. Shift the global round if it has expired
     if (elapsedTotal >= totalRoundDuration) {
       const nextCp = generateCrashPoint();
-      const updateResult = await sql`
-        UPDATE helakash_active_rounds
+      await sql`
+        UPDATE ${TABLES.ACTIVE_ROUNDS}
         SET crash_point = crash_point_2,
             crash_point_2 = crash_point_3,
             crash_point_3 = ${nextCp},
@@ -93,7 +91,7 @@ export default async function handler(req, res) {
       const reQuery = await sql`
         SELECT crash_point, crash_point_2, crash_point_3, created_at,
                EXTRACT(EPOCH FROM (NOW() - created_at)) * 1000 AS elapsed_ms
-        FROM helakash_active_rounds 
+        FROM ${TABLES.ACTIVE_ROUNDS} 
         WHERE phone = 'global';
       `;
       globalRow = reQuery.rows[0];
@@ -107,7 +105,7 @@ export default async function handler(req, res) {
 
     // 4. Align individual user active round status in database
     await sql`
-      INSERT INTO helakash_active_rounds (phone, crash_point, crash_point_2, crash_point_3, status, created_at)
+      INSERT INTO ${TABLES.ACTIVE_ROUNDS} (phone, crash_point, crash_point_2, crash_point_3, status, created_at)
       VALUES (${cleanPhone}, ${crashPoint}, ${crashPoint2}, ${crashPoint3}, 'ACTIVE', ${globalRow.created_at})
       ON CONFLICT (phone) DO UPDATE 
       SET crash_point = ${crashPoint},
@@ -235,7 +233,7 @@ export default async function handler(req, res) {
 async function cleanUpRound(phone) {
   try {
     await sql`
-      UPDATE helakash_active_rounds 
+      UPDATE ${TABLES.ACTIVE_ROUNDS} 
       SET status = 'CRASHED' 
       WHERE phone = ${phone};
     `;

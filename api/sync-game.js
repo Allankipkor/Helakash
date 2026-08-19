@@ -1,6 +1,4 @@
-import { neon } from '@neondatabase/serverless';
-
-const sql = neon(process.env.POSTGRES_URL || process.env.DATABASE_URL, { fullResults: true });
+import { sql, TABLES } from './db.js';
 
 export default async function handler(req, res) {
   if (req.method !== 'POST') {
@@ -15,12 +13,12 @@ export default async function handler(req, res) {
   // Load min stake setting from DB
   let minStake = 400;
   try {
-    const settingsQuery = await sql`SELECT min_stake FROM helakash_settings WHERE id = 'global';`;
+    const settingsQuery = await sql`SELECT min_stake FROM ${TABLES.SETTINGS} WHERE id = 'global';`;
     if (settingsQuery.rows.length > 0) {
       minStake = parseFloat(settingsQuery.rows[0].min_stake);
     }
   } catch (dbErr) {
-    console.error("Error reading helakash_settings in sync-game.js:", dbErr);
+    console.error("Error reading settings in sync-game.js:", dbErr);
   }
 
   // Validate bet amount if provided
@@ -41,7 +39,7 @@ export default async function handler(req, res) {
       const activeRoundQuery = await sql`
         SELECT crash_point, status, created_at,
                EXTRACT(EPOCH FROM (NOW() - created_at)) * 1000 AS elapsed_ms
-        FROM helakash_active_rounds 
+        FROM ${TABLES.ACTIVE_ROUNDS} 
         WHERE phone = ${cleanPhone};
       `;
 
@@ -77,7 +75,7 @@ export default async function handler(req, res) {
 
       // Valid cashout. Set status to 'CASHED_OUT' to prevent double cashout
       await sql`
-        UPDATE helakash_active_rounds 
+        UPDATE ${TABLES.ACTIVE_ROUNDS} 
         SET status = 'CASHED_OUT' 
         WHERE phone = ${cleanPhone};
       `;
@@ -89,7 +87,7 @@ export default async function handler(req, res) {
 
   try {
     const userQuery = await sql`
-      SELECT balance FROM helakash_users WHERE phone = ${cleanPhone};
+      SELECT balance FROM ${TABLES.USERS} WHERE phone = ${cleanPhone};
     `;
 
     if (userQuery.rows.length === 0) {
@@ -105,7 +103,7 @@ export default async function handler(req, res) {
 
     // Update user balance
     await sql`
-      UPDATE helakash_users 
+      UPDATE ${TABLES.USERS} 
       SET balance = ${newBalance} 
       WHERE phone = ${cleanPhone};
     `;
@@ -113,7 +111,7 @@ export default async function handler(req, res) {
     // Log game transaction
     const reference = `GM-${Date.now()}`;
     await sql`
-      INSERT INTO helakash_transactions (phone, type, amount, status, reference)
+      INSERT INTO ${TABLES.TRANSACTIONS} (phone, type, amount, status, reference)
       VALUES (${cleanPhone}, ${type}, ${amount}, 'Success', ${reference});
     `;
 

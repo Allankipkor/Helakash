@@ -1,6 +1,4 @@
-import { neon } from '@neondatabase/serverless';
-
-const sql = neon(process.env.POSTGRES_URL || process.env.DATABASE_URL, { fullResults: true });
+import { sql, TABLES } from './db.js';
 
 export default async function handler(req, res) {
   const method = req.method;
@@ -8,7 +6,7 @@ export default async function handler(req, res) {
   if (method === 'GET') {
     try {
       // 1. Fetch current settings from database
-      const settingsQuery = await sql`SELECT * FROM helakash_settings WHERE id = 'global';`;
+      const settingsQuery = await sql`SELECT * FROM ${TABLES.SETTINGS} WHERE id = 'global';`;
       if (settingsQuery.rows.length === 0) {
         return res.status(404).json({ error: 'Settings not found in database. Please run init-db.' });
       }
@@ -21,7 +19,7 @@ export default async function handler(req, res) {
         // Fetch current active rounds for global session
         const roundsQuery = await sql`
           SELECT crash_point, crash_point_2, crash_point_3 
-          FROM helakash_active_rounds 
+          FROM ${TABLES.ACTIVE_ROUNDS} 
           WHERE phone = 'global';
         `;
         const rounds = roundsQuery.rows[0] || { crash_point: 1.50, crash_point_2: 2.20, crash_point_3: 1.30 };
@@ -32,7 +30,7 @@ export default async function handler(req, res) {
           depositsQuery = await sql`
             SELECT id, phone, amount, reference, created_at,
                    TO_CHAR(COALESCE(created_at, CURRENT_TIMESTAMP) AT TIME ZONE 'Africa/Nairobi', 'HH24:MI') as db_time
-            FROM helakash_transactions 
+            FROM ${TABLES.TRANSACTIONS} 
             WHERE (type ILIKE '%Deposit%') AND (status ILIKE '%success%') 
             ORDER BY created_at DESC, id DESC 
             LIMIT 50;
@@ -41,7 +39,7 @@ export default async function handler(req, res) {
           console.warn("Falling back to standard SELECT for transactions:", sqlErr.message);
           depositsQuery = await sql`
             SELECT id, phone, amount, reference, created_at
-            FROM helakash_transactions 
+            FROM ${TABLES.TRANSACTIONS} 
             WHERE (type ILIKE '%Deposit%') AND (status ILIKE '%success%') 
             ORDER BY created_at DESC, id DESC 
             LIMIT 50;
@@ -148,7 +146,7 @@ export default async function handler(req, res) {
       } = req.body;
 
       // 1. Fetch settings to authenticate
-      const settingsQuery = await sql`SELECT admin_passcode FROM helakash_settings WHERE id = 'global';`;
+      const settingsQuery = await sql`SELECT admin_passcode FROM ${TABLES.SETTINGS} WHERE id = 'global';`;
       if (settingsQuery.rows.length === 0) {
         return res.status(404).json({ error: 'Settings not initialized.' });
       }
@@ -161,7 +159,7 @@ export default async function handler(req, res) {
       // 2. Handle updating settings if provided
       if (min_deposit !== undefined) {
         await sql`
-          UPDATE helakash_settings
+          UPDATE ${TABLES.SETTINGS}
           SET min_deposit = ${parseFloat(min_deposit)},
               min_withdrawal = ${parseFloat(min_withdrawal)},
               min_stake = ${parseFloat(min_stake)},
@@ -179,7 +177,7 @@ export default async function handler(req, res) {
       // 3. Handle updating active rounds / crash point overrides if provided
       if (crash_point !== undefined) {
         await sql`
-          INSERT INTO helakash_active_rounds (phone, crash_point, crash_point_2, crash_point_3, status)
+          INSERT INTO ${TABLES.ACTIVE_ROUNDS} (phone, crash_point, crash_point_2, crash_point_3, status)
           VALUES ('global', ${parseFloat(crash_point)}, ${parseFloat(crash_point_2)}, ${parseFloat(crash_point_3)}, 'ACTIVE')
           ON CONFLICT (phone) DO UPDATE
           SET crash_point = ${parseFloat(crash_point)},

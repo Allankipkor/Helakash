@@ -1,6 +1,4 @@
-import { neon } from '@neondatabase/serverless';
-
-const sql = neon(process.env.POSTGRES_URL || process.env.DATABASE_URL, { fullResults: true });
+import { sql, TABLES } from './db.js';
 
 export default async function handler(req, res) {
   // Pay Hero invokes callback via POST
@@ -17,7 +15,7 @@ export default async function handler(req, res) {
     // Log webhook payload to DB for debugging
     try {
       await sql`
-        INSERT INTO helakash_webhook_logs (payload)
+        INSERT INTO ${TABLES.WEBHOOK_LOGS} (payload)
         VALUES (${JSON.stringify(callbackData)});
       `;
     } catch (logErr) {
@@ -40,7 +38,7 @@ export default async function handler(req, res) {
 
     // 1. Fetch transaction to get phone and confirm it exists
     const txQuery = await sql`
-      SELECT phone, amount, status FROM helakash_transactions 
+      SELECT phone, amount, status FROM ${TABLES.TRANSACTIONS} 
       WHERE reference = ${externalReference};
     `;
 
@@ -56,7 +54,7 @@ export default async function handler(req, res) {
       
       // Update transaction status and timestamp to accurate completion real-time
       await sql`
-        UPDATE helakash_transactions 
+        UPDATE ${TABLES.TRANSACTIONS} 
         SET status = ${finalStatus}, 
             reference = COALESCE(${mpesaReceipt}, reference),
             created_at = CURRENT_TIMESTAMP
@@ -68,7 +66,7 @@ export default async function handler(req, res) {
         
         // Update user balance
         await sql`
-          UPDATE helakash_users 
+          UPDATE ${TABLES.USERS} 
           SET balance = balance + ${creditAmount} 
           WHERE phone = ${tx.phone};
         `;
