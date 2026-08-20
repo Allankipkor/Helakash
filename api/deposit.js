@@ -158,10 +158,11 @@ export default async function handler(req, res) {
 
       console.log(`[TinyPesa] Initiating STK push for ${payPhone0} amount ${depositAmount} (Ref: ${reference})`);
 
+      const cleanKey = (tinypesaApiKey || '').trim();
       const response = await fetch('https://tinypesa.com/api/v1/express/initialize', {
         method: 'POST',
         headers: {
-          'ApiKey': tinypesaApiKey,
+          'ApiKey': cleanKey,
           'Content-Type': 'application/x-www-form-urlencoded'
         },
         body: formData.toString()
