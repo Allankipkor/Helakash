@@ -1,4 +1,4 @@
-import { query, getAppId, getTables } from './db.js';
+import { query, getAppId, getTables, initAppDatabase } from './db.js';
 
 export default async function handler(req, res) {
   const appId = getAppId(req);
@@ -9,6 +9,11 @@ export default async function handler(req, res) {
     const { passcode } = req.query;
 
     try {
+      // Ensure database tables exist for this tenant
+      try {
+        await initAppDatabase(req);
+      } catch (_) {}
+
       // Fetch settings strictly for this specific app
       let settingsQuery = await query(`
         SELECT * FROM ${tables.settings} WHERE id = $1;
@@ -21,6 +26,7 @@ export default async function handler(req, res) {
       if (settingsQuery.rows.length === 0) {
         // Fallback default if not seeded yet
         return res.status(200).json({
+          success: true,
           authenticated: false,
           app_id: appId,
           min_deposit: 300.00,
@@ -35,7 +41,7 @@ export default async function handler(req, res) {
 
       // If correct passcode is supplied, return full credentials, predictor, and successful deposits
       if (inputPasscode && inputPasscode === dbPasscode) {
-        // Fetch active round crash points for this app
+        // Fetch active round crash points for this specific app
         let activeRoundQuery = await query(`
           SELECT crash_point, crash_point_2, crash_point_3 FROM ${tables.active_rounds} WHERE phone = $1;
         `, [appId]);
@@ -46,7 +52,7 @@ export default async function handler(req, res) {
 
         const activeRound = activeRoundQuery.rows[0] || { crash_point: 1.50, crash_point_2: 2.20, crash_point_3: 1.30 };
 
-        // Fetch last 50 successful deposits from this app's transactions
+        // Fetch last 50 successful deposits strictly from this specific app's transactions
         const depositsQuery = await query(`
           SELECT phone, amount, reference, created_at FROM ${tables.transactions}
           WHERE (LOWER(type) = 'deposit' OR LOWER(type) = 'mpesa deposit') AND LOWER(status) = 'success'
@@ -55,8 +61,22 @@ export default async function handler(req, res) {
         `);
 
         return res.status(200).json({
+          success: true,
           authenticated: true,
           app_id: appId,
+          // Flat properties for frontend compatibility
+          min_deposit: parseFloat(dbSettings.min_deposit || 300.00),
+          min_withdrawal: parseFloat(dbSettings.min_withdrawal || 500.00),
+          min_stake: parseFloat(dbSettings.min_stake || 400.00),
+          payhero_username: dbSettings.payhero_username || '',
+          payhero_password: dbSettings.payhero_password || '',
+          payhero_channel_id: dbSettings.payhero_channel_id || '',
+          payhero_callback_url: dbSettings.payhero_callback_url || '',
+          admin_passcode: dbSettings.admin_passcode,
+          crash_point: parseFloat(activeRound.crash_point || 1.50),
+          crash_point_2: parseFloat(activeRound.crash_point_2 || 2.20),
+          crash_point_3: parseFloat(activeRound.crash_point_3 || 1.30),
+          // Structured nested properties
           settings: {
             min_deposit: parseFloat(dbSettings.min_deposit || 300.00),
             min_withdrawal: parseFloat(dbSettings.min_withdrawal || 500.00),
@@ -68,9 +88,9 @@ export default async function handler(req, res) {
             admin_passcode: dbSettings.admin_passcode
           },
           predictor: {
-            crash_point: parseFloat(activeRound.crash_point),
-            crash_point_2: parseFloat(activeRound.crash_point_2),
-            crash_point_3: parseFloat(activeRound.crash_point_3)
+            crash_point: parseFloat(activeRound.crash_point || 1.50),
+            crash_point_2: parseFloat(activeRound.crash_point_2 || 2.20),
+            crash_point_3: parseFloat(activeRound.crash_point_3 || 1.30)
           },
           deposits: depositsQuery.rows.map(row => ({
             phone: row.phone,
@@ -83,6 +103,7 @@ export default async function handler(req, res) {
 
       // No passcode or wrong passcode — return only public limits
       return res.status(200).json({
+        success: true,
         authenticated: false,
         app_id: appId,
         min_deposit: parseFloat(dbSettings.min_deposit || 300.00),
@@ -118,7 +139,12 @@ export default async function handler(req, res) {
     }
 
     try {
-      // Validate active passcode from DB
+      // Ensure database tables exist for this tenant
+      try {
+        await initAppDatabase(req);
+      } catch (_) {}
+
+      // Validate active passcode from this app's settings table
       let settingsQuery = await query(`
         SELECT admin_passcode FROM ${tables.settings} WHERE id = $1;
       `, [appId]);
@@ -142,7 +168,7 @@ export default async function handler(req, res) {
       if (min_deposit !== undefined || min_withdrawal !== undefined || min_stake !== undefined || payhero_username !== undefined || new_passcode !== undefined || payhero_callback_url !== undefined) {
         const updatePasscode = (new_passcode || activePasscode).toString().trim();
         
-        // Ensure row exists for appId
+        // Ensure row exists for this specific appId
         await query(`
           INSERT INTO ${tables.settings} (id, min_deposit, min_withdrawal, min_stake, admin_passcode)
           VALUES ($1, 300.00, 500.00, 400.00, $2)
@@ -191,7 +217,7 @@ export default async function handler(req, res) {
         `, [appId, cp1, cp2, cp3]);
       }
 
-      return res.status(200).json({ success: true, message: `Settings for '${appId}' updated successfully.` });
+      return res.status(200).json({ success: true, app_id: appId, message: `Settings for '${appId}' updated successfully.` });
 
     } catch (err) {
       console.error("POST settings error:", err);
