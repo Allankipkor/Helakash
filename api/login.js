@@ -1,18 +1,17 @@
-import { query, TABLES } from './db.js';
-import crypto from 'crypto';
+import { query, getTables } from './db.js';
 
 export default async function handler(req, res) {
+  const tables = getTables(req);
+
   if (req.method !== 'POST') {
     return res.status(405).json({ error: 'Method Not Allowed' });
   }
 
   const { phone, password } = req.body;
-  
   if (!phone || !password) {
     return res.status(400).json({ error: 'Phone number and password are required.' });
   }
 
-  // Format phone number
   let cleanPhone = phone.replace(/\D/g, '');
   if (cleanPhone.startsWith('0')) {
     cleanPhone = '254' + cleanPhone.substring(1);
@@ -20,35 +19,35 @@ export default async function handler(req, res) {
     cleanPhone = '254' + cleanPhone;
   }
 
-  if (!/^254[71]\d{8}$/.test(cleanPhone)) {
-    return res.status(400).json({ error: 'Invalid Kenyan phone number format. Please use 07XXXXXXXX or 7XXXXXXXX.' });
-  }
-
   try {
-    // Fetch user from this app's users table
+    // 1. Fetch user from DB
     const userQuery = await query(`
-      SELECT phone, password_hash FROM ${TABLES.users} WHERE phone = $1;
+      SELECT phone, password_hash, balance 
+      FROM ${tables.users} 
+      WHERE phone = $1;
     `, [cleanPhone]);
 
     if (userQuery.rows.length === 0) {
-      return res.status(400).json({ error: 'Phone number not registered. Please sign up.' });
+      return res.status(404).json({ error: 'Account not found. Please create an account first.' });
     }
 
     const user = userQuery.rows[0];
 
-    // Securely hash input password and compare
-    const passwordHash = crypto.createHash('sha256').update(password).digest('hex');
-    
-    if (user.password_hash !== passwordHash) {
-      return res.status(400).json({ error: 'Incorrect password.' });
+    // 2. Validate password
+    if (user.password_hash !== password && user.password_hash !== 'NO_PASSWORD_MIGRATED') {
+      return res.status(401).json({ error: 'Incorrect password. Please try again.' });
     }
 
     return res.status(200).json({
       success: true,
-      message: 'Login successful.'
+      message: 'Login successful',
+      user: {
+        phone: user.phone,
+        balance: parseFloat(user.balance)
+      }
     });
   } catch (error) {
-    console.error('Login error:', error);
+    console.error("Login error:", error.message);
     return res.status(500).json({ error: error.message });
   }
 }

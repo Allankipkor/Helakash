@@ -1,128 +1,118 @@
-import { query, APP_ID, TABLES } from './db.js';
+import { query, getAppId, getTables } from './db.js';
 
 export default async function handler(req, res) {
+  const tables = getTables(req);
+  const appId = getAppId(req);
+
   if (req.method !== 'POST') {
     return res.status(405).json({ error: 'Method Not Allowed' });
   }
 
-  const { phone, type, amount, multiplier, betAmount } = req.body;
-  if (!phone || !type || amount === undefined) {
-    return res.status(400).json({ error: 'Phone, type, and amount are required.' });
-  }
+  const { phone, betAmount, cashoutMultiplier, crashed } = req.body;
 
-  // Dynamic min stake check for Aviator
-  if (type.toLowerCase().includes('aviator')) {
-    let minStake = 400.00;
-    try {
-      let settingsQuery = await query(`SELECT min_stake FROM ${TABLES.settings} WHERE id = $1;`, [APP_ID]);
-      if (settingsQuery.rows.length > 0) {
-        minStake = parseFloat(settingsQuery.rows[0].min_stake || 400.00);
-      }
-    } catch (dbErr) {
-      console.error("Failed to fetch settings from DB in sync-game.js:", dbErr.message);
-    }
-
-    const checkAmount = type.toLowerCase().includes('bet') ? Math.abs(parseFloat(amount)) : parseFloat(betAmount);
-    if (!isNaN(checkAmount) && checkAmount < minStake) {
-      return res.status(400).json({ error: `Minimum stake for Aviator is KES ${minStake}.` });
-    }
-  }
-
-  let cleanPhone = phone.replace(/\D/g, '');
+  let cleanPhone = phone ? phone.replace(/\D/g, '') : '';
   if (cleanPhone.startsWith('0')) {
     cleanPhone = '254' + cleanPhone.substring(1);
   } else if (cleanPhone.startsWith('7') || cleanPhone.startsWith('1')) {
     cleanPhone = '254' + cleanPhone;
   }
 
-  // Security Check: If it is an Aviator Win transaction, validate client-side multiplier with server-side crash_point
-  if (type.toLowerCase().includes('aviator win')) {
+  if (betAmount !== undefined) {
+    let minStake = 400.00;
     try {
-      const activeRoundQuery = await query(`
-        SELECT crash_point, status, created_at,
-               EXTRACT(EPOCH FROM (NOW() - created_at)) * 1000 AS elapsed_ms
-        FROM ${TABLES.active_rounds} 
-        WHERE phone = $1;
-      `, [cleanPhone]);
-
-      if (activeRoundQuery.rows.length === 0) {
-        return res.status(400).json({ error: "Game round already crashed or not active." });
+      let settingsQuery = await query(`SELECT min_stake FROM ${tables.settings} WHERE id = $1;`, [appId]);
+      if (settingsQuery.rows.length === 0) {
+        settingsQuery = await query(`SELECT min_stake FROM ${tables.settings} LIMIT 1;`);
       }
-
-      const row = activeRoundQuery.rows[0];
-      if (row.status !== 'ACTIVE') {
-        return res.status(400).json({ error: "Game round already crashed or not active." });
+      if (settingsQuery.rows.length > 0) {
+        minStake = parseFloat(settingsQuery.rows[0].min_stake || 400.00);
       }
-
-      const secretCrashPoint = parseFloat(row.crash_point);
-      const clientMultiplier = parseFloat(multiplier);
-
-      if (isNaN(clientMultiplier) || clientMultiplier > secretCrashPoint) {
-        return res.status(400).json({ error: `Invalid cashout! Round crashed at x${secretCrashPoint.toFixed(2)}.` });
-      }
-
-      // Time-based validation: ensure the user cashed out BEFORE the plane actually crashed
-      const elapsedTotal = parseFloat(row.elapsed_ms);
-      const flightDuration = Math.floor(7500 * Math.pow(clientMultiplier - 1.0, 1 / 1.2));
-      const maxAllowedTime = 7500 + flightDuration + 3500; // 3.5s latency buffer
-
-      if (elapsedTotal > maxAllowedTime) {
-        return res.status(400).json({ error: "Cashout request timed out (round already ended)." });
-      }
-
-      const expectedWinnings = parseFloat(betAmount) * clientMultiplier;
-      if (Math.abs(expectedWinnings - parseFloat(amount)) > 0.1) {
-        return res.status(400).json({ error: "Calculated winnings mismatch." });
-      }
-
-      // Valid cashout. Set status to 'CASHED_OUT' to prevent double cashout
-      await query(`
-        UPDATE ${TABLES.active_rounds} 
-        SET status = 'CASHED_OUT' 
-        WHERE phone = $1;
-      `, [cleanPhone]);
     } catch (dbErr) {
-      console.error("Database error during secure cashout check:", dbErr);
-      return res.status(500).json({ error: "Database error during secure cashout verification." });
+      console.error("Failed to fetch min_stake from DB:", dbErr.message);
+    }
+
+    if (parseFloat(betAmount) < minStake) {
+      return res.status(400).json({ error: `Minimum stake amount is KES ${minStake}.` });
     }
   }
 
   try {
-    const userQuery = await query(`
-      SELECT balance FROM ${TABLES.users} WHERE phone = $1;
-    `, [cleanPhone]);
+    let balance = 0.00;
+    if (cleanPhone) {
+      const userRes = await query(`
+        SELECT balance FROM ${tables.users} 
+        WHERE phone = $1;
+      `, [cleanPhone]);
 
-    if (userQuery.rows.length === 0) {
-      return res.status(404).json({ error: "User account not found." });
+      if (userRes.rows.length > 0) {
+        balance = parseFloat(userRes.rows[0].balance);
+      }
     }
 
-    const currentBalance = parseFloat(userQuery.rows[0].balance);
-    const newBalance = currentBalance + parseFloat(amount);
+    if (betAmount !== undefined && !cashoutMultiplier && !crashed) {
+      const bet = parseFloat(betAmount);
+      if (balance < bet) {
+        return res.status(400).json({ error: 'Insufficient balance to place bet.' });
+      }
 
-    if (newBalance < 0) {
-      return res.status(400).json({ error: "Insufficient balance." });
+      const updated = await query(`
+        UPDATE ${tables.users} 
+        SET balance = balance - $1 
+        WHERE phone = $2 
+        RETURNING balance;
+      `, [bet, cleanPhone]);
+
+      return res.status(200).json({
+        success: true,
+        action: 'bet_placed',
+        newBalance: parseFloat(updated.rows[0].balance)
+      });
     }
 
-    // Update user balance
-    await query(`
-      UPDATE ${TABLES.users} 
-      SET balance = $1 
-      WHERE phone = $2;
-    `, [newBalance, cleanPhone]);
+    if (cashoutMultiplier !== undefined && betAmount !== undefined) {
+      const mult = parseFloat(cashoutMultiplier);
+      const bet = parseFloat(betAmount);
 
-    // Log game transaction
-    const reference = `GM-${Date.now()}`;
-    await query(`
-      INSERT INTO ${TABLES.transactions} (phone, type, amount, status, reference)
-      VALUES ($1, $2, $3, 'Success', $4);
-    `, [cleanPhone, type, parseFloat(amount), reference]);
+      const activeRound = await query(`
+        SELECT crash_point, status FROM ${tables.active_rounds} 
+        WHERE phone = $1;
+      `, [cleanPhone]);
 
-    return res.status(200).json({
-      success: true,
-      newBalance: newBalance
-    });
+      if (activeRound.rows.length === 0 || activeRound.rows[0].status !== 'ACTIVE') {
+        return res.status(400).json({ error: 'No active round found or plane has already crashed.' });
+      }
+
+      const actualCrashPoint = parseFloat(activeRound.rows[0].crash_point);
+      if (mult > actualCrashPoint) {
+        return res.status(400).json({ error: 'Cashout multiplier exceeds crash point.' });
+      }
+
+      const winAmount = parseFloat((bet * mult).toFixed(2));
+
+      const updated = await query(`
+        UPDATE ${tables.users} 
+        SET balance = balance + $1 
+        WHERE phone = $2 
+        RETURNING balance;
+      `, [winAmount, cleanPhone]);
+
+      const ref = `WIN-${appId.toUpperCase()}-${Date.now()}`;
+      await query(`
+        INSERT INTO ${tables.transactions} (phone, type, amount, status, reference)
+        VALUES ($1, 'Aviator Win', $2, 'Success', $3);
+      `, [cleanPhone, winAmount, ref]);
+
+      return res.status(200).json({
+        success: true,
+        action: 'cashed_out',
+        winAmount: winAmount,
+        newBalance: parseFloat(updated.rows[0].balance)
+      });
+    }
+
+    return res.status(200).json({ success: true, balance: balance });
   } catch (error) {
-    console.error("Game sync error:", error);
+    console.error("sync-game error:", error.message);
     return res.status(500).json({ error: error.message });
   }
 }

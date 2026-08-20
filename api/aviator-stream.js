@@ -1,10 +1,13 @@
-import { query, APP_ID, TABLES } from './db.js';
+import { query, getAppId, getTables } from './db.js';
 
 export const config = {
   maxDuration: 60, // Maximum execution duration for Vercel functions (60s on Hobby tier)
 };
 
 export default async function handler(req, res) {
+  const appId = getAppId(req);
+  const tables = getTables(req);
+
   if (req.method !== 'GET') {
     return res.status(405).json({ error: 'Method Not Allowed' });
   }
@@ -38,9 +41,18 @@ export default async function handler(req, res) {
     let globalQuery = await query(`
       SELECT crash_point, crash_point_2, crash_point_3, created_at,
              EXTRACT(EPOCH FROM (NOW() - created_at)) * 1000 AS elapsed_ms
-      FROM ${TABLES.active_rounds} 
+      FROM ${tables.active_rounds} 
       WHERE phone = $1;
-    `, [APP_ID]);
+    `, [appId]);
+
+    if (globalQuery.rows.length === 0) {
+      globalQuery = await query(`
+        SELECT crash_point, crash_point_2, crash_point_3, created_at,
+               EXTRACT(EPOCH FROM (NOW() - created_at)) * 1000 AS elapsed_ms
+        FROM ${tables.active_rounds} 
+        LIMIT 1;
+      `);
+    }
 
     if (globalQuery.rows.length === 0) {
       // Create initial round if missing
@@ -48,16 +60,16 @@ export default async function handler(req, res) {
       crashPoint2 = generateCrashPoint();
       crashPoint3 = generateCrashPoint();
       await query(`
-        INSERT INTO ${TABLES.active_rounds} (phone, crash_point, crash_point_2, crash_point_3, status, created_at)
+        INSERT INTO ${tables.active_rounds} (phone, crash_point, crash_point_2, crash_point_3, status, created_at)
         VALUES ($1, $2, $3, $4, 'ACTIVE', NOW());
-      `, [APP_ID, crashPoint, crashPoint2, crashPoint3]);
+      `, [appId, crashPoint, crashPoint2, crashPoint3]);
 
       globalQuery = await query(`
         SELECT crash_point, crash_point_2, crash_point_3, created_at,
                EXTRACT(EPOCH FROM (NOW() - created_at)) * 1000 AS elapsed_ms
-        FROM ${TABLES.active_rounds} 
+        FROM ${tables.active_rounds} 
         WHERE phone = $1;
-      `, [APP_ID]);
+      `, [appId]);
     }
 
     let globalRow = globalQuery.rows[0];
@@ -78,7 +90,7 @@ export default async function handler(req, res) {
     if (elapsedTotal >= totalRoundDuration) {
       const nextCp = generateCrashPoint();
       await query(`
-        UPDATE ${TABLES.active_rounds}
+        UPDATE ${tables.active_rounds}
         SET crash_point = crash_point_2,
             crash_point_2 = crash_point_3,
             crash_point_3 = $1,
@@ -86,17 +98,17 @@ export default async function handler(req, res) {
             created_at = NOW()
         WHERE phone = $2
           AND EXTRACT(EPOCH FROM (NOW() - created_at)) * 1000 >= $3;
-      `, [nextCp, APP_ID, totalRoundDuration]);
+      `, [nextCp, appId, totalRoundDuration]);
 
       // Re-read updated round parameters
       const reQuery = await query(`
         SELECT crash_point, crash_point_2, crash_point_3, created_at,
                EXTRACT(EPOCH FROM (NOW() - created_at)) * 1000 AS elapsed_ms
-        FROM ${TABLES.active_rounds} 
+        FROM ${tables.active_rounds} 
         WHERE phone = $1
         ORDER BY created_at DESC
         LIMIT 1;
-      `, [APP_ID]);
+      `, [appId]);
 
       globalRow = reQuery.rows[0];
       crashPoint = parseFloat(globalRow.crash_point);
@@ -109,7 +121,7 @@ export default async function handler(req, res) {
 
     // 4. Align individual user active round status in database
     await query(`
-      INSERT INTO ${TABLES.active_rounds} (phone, crash_point, crash_point_2, crash_point_3, status, created_at)
+      INSERT INTO ${tables.active_rounds} (phone, crash_point, crash_point_2, crash_point_3, status, created_at)
       VALUES ($1, $2, $3, $4, 'ACTIVE', $5)
       ON CONFLICT (phone) DO UPDATE 
       SET crash_point = $2,
@@ -127,7 +139,7 @@ export default async function handler(req, res) {
     globalCreatedAt = Date.now();
   }
 
-  console.log(`Starting secure synchronized Aviator stream for ${cleanPhone} on ${APP_ID}. Crash limit: ${crashPoint.toFixed(2)}`);
+  console.log(`Starting secure synchronized Aviator stream for ${cleanPhone} on ${appId}. Crash limit: ${crashPoint.toFixed(2)}`);
 
   // Set SSE Headers
   res.writeHead(200, {
@@ -175,7 +187,7 @@ export default async function handler(req, res) {
 
   const wasCancelled = await runWaiting();
   if (wasCancelled) {
-    await cleanUpRound(cleanPhone);
+    await cleanUpRound(cleanPhone, tables);
     res.end();
     return;
   }
@@ -193,7 +205,7 @@ export default async function handler(req, res) {
         if (elapsedFlight >= flightDurationLimit) {
           clearInterval(interval);
           sendEvent('crashed', { multiplier: crashPoint });
-          await cleanUpRound(cleanPhone);
+          await cleanUpRound(cleanPhone, tables);
           res.end();
           resolve(false);
           return;
@@ -208,7 +220,7 @@ export default async function handler(req, res) {
         if (currentMult >= crashPoint) {
           clearInterval(interval);
           sendEvent('crashed', { multiplier: crashPoint });
-          await cleanUpRound(cleanPhone);
+          await cleanUpRound(cleanPhone, tables);
           res.end();
           resolve(false);
         } else {
@@ -225,15 +237,15 @@ export default async function handler(req, res) {
 
   const flightCancelled = await runFlying();
   if (flightCancelled) {
-    await cleanUpRound(cleanPhone);
+    await cleanUpRound(cleanPhone, tables);
     res.end();
   }
 }
 
-async function cleanUpRound(phone) {
+async function cleanUpRound(phone, tables) {
   try {
     await query(`
-      UPDATE ${TABLES.active_rounds} 
+      UPDATE ${tables.active_rounds} 
       SET status = 'CRASHED' 
       WHERE phone = $1;
     `, [phone]);

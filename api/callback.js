@@ -1,6 +1,8 @@
-import { query, TABLES } from './db.js';
+import { query, getTables } from './db.js';
 
 export default async function handler(req, res) {
+  const tables = getTables(req);
+
   // Pay Hero invokes callback via POST
   if (req.method !== 'POST') {
     return res.status(405).json({ error: 'Method Not Allowed' });
@@ -15,7 +17,7 @@ export default async function handler(req, res) {
     // Log webhook payload to DB for debugging
     try {
       await query(`
-        INSERT INTO ${TABLES.webhook_logs} (payload)
+        INSERT INTO ${tables.webhook_logs} (payload)
         VALUES ($1);
       `, [JSON.stringify(callbackData)]);
     } catch (logErr) {
@@ -37,7 +39,7 @@ export default async function handler(req, res) {
 
     // 1. Fetch transaction to get phone and confirm it exists
     const txQuery = await query(`
-      SELECT phone, amount, status FROM ${TABLES.transactions} 
+      SELECT phone, amount, status FROM ${tables.transactions} 
       WHERE reference = $1;
     `, [externalReference]);
 
@@ -53,7 +55,7 @@ export default async function handler(req, res) {
       
       // Update transaction status
       await query(`
-        UPDATE ${TABLES.transactions} 
+        UPDATE ${tables.transactions} 
         SET status = $1, reference = COALESCE($2, reference)
         WHERE reference = $3;
       `, [finalStatus, mpesaReceipt || null, externalReference]);
@@ -63,7 +65,7 @@ export default async function handler(req, res) {
         
         // Update user balance
         await query(`
-          UPDATE ${TABLES.users} 
+          UPDATE ${tables.users} 
           SET balance = balance + $1 
           WHERE phone = $2;
         `, [creditAmount, tx.phone]);

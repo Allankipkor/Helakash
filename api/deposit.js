@@ -1,6 +1,9 @@
-import { query, APP_ID, TABLES } from './db.js';
+import { query, getAppId, getTables } from './db.js';
 
 export default async function handler(req, res) {
+  const appId = getAppId(req);
+  const tables = getTables(req);
+
   // Only allow POST requests
   if (req.method !== 'POST') {
     return res.status(405).json({ error: 'Method Not Allowed' });
@@ -18,7 +21,10 @@ export default async function handler(req, res) {
   let callbackUrl = null;
 
   try {
-    let settingsQuery = await query(`SELECT * FROM ${TABLES.settings} WHERE id = $1;`, [APP_ID]);
+    let settingsQuery = await query(`SELECT * FROM ${tables.settings} WHERE id = $1;`, [appId]);
+    if (settingsQuery.rows.length === 0) {
+      settingsQuery = await query(`SELECT * FROM ${tables.settings} LIMIT 1;`);
+    }
     if (settingsQuery.rows.length > 0) {
       const dbSettings = settingsQuery.rows[0];
       minDeposit = parseFloat(dbSettings.min_deposit || 300.00);
@@ -88,26 +94,26 @@ export default async function handler(req, res) {
     // Simulate network delay
     await new Promise(resolve => setTimeout(resolve, 1000));
 
-    const reference = `SIM-${APP_ID.toUpperCase()}-${Date.now()}`;
+    const reference = `SIM-${appId.toUpperCase()}-${Date.now()}`;
 
     try {
       // Ensure user exists in DB
       await query(`
-        INSERT INTO ${TABLES.users} (phone, balance, password_hash)
+        INSERT INTO ${tables.users} (phone, balance, password_hash)
         VALUES ($1, 0.00, 'NO_PASSWORD_MIGRATED')
         ON CONFLICT (phone) DO NOTHING;
       `, [cleanAccountPhone]);
 
       // Update balance directly in simulated mode
       await query(`
-        UPDATE ${TABLES.users}
+        UPDATE ${tables.users}
         SET balance = balance + $1
         WHERE phone = $2;
       `, [parseFloat(amount), cleanAccountPhone]);
 
       // Log transaction in DB
       await query(`
-        INSERT INTO ${TABLES.transactions} (phone, type, amount, status, reference)
+        INSERT INTO ${tables.transactions} (phone, type, amount, status, reference)
         VALUES ($1, 'Deposit', $2, 'Success', $3);
       `, [cleanAccountPhone, parseFloat(amount), reference]);
     } catch (dbErr) {
@@ -123,7 +129,7 @@ export default async function handler(req, res) {
   }
 
   try {
-    const reference = `${APP_ID.toUpperCase()}-${Date.now()}`;
+    const reference = `${appId.toUpperCase()}-${Date.now()}`;
     const payload = {
       amount: parseInt(amount),
       phone_number: cleanPhone,
@@ -138,14 +144,14 @@ export default async function handler(req, res) {
 
     // Ensure user exists in DB
     await query(`
-      INSERT INTO ${TABLES.users} (phone, balance, password_hash)
+      INSERT INTO ${tables.users} (phone, balance, password_hash)
       VALUES ($1, 0.00, 'NO_PASSWORD_MIGRATED')
       ON CONFLICT (phone) DO NOTHING;
     `, [cleanAccountPhone]);
 
     // Log pending transaction in DB
     await query(`
-      INSERT INTO ${TABLES.transactions} (phone, type, amount, status, reference)
+      INSERT INTO ${tables.transactions} (phone, type, amount, status, reference)
       VALUES ($1, 'Deposit', $2, 'PENDING', $3);
     `, [cleanAccountPhone, parseFloat(amount), reference]);
 
@@ -170,7 +176,7 @@ export default async function handler(req, res) {
     if (!response.ok) {
       // Mark transaction as failed in DB
       await query(`
-        UPDATE ${TABLES.transactions} 
+        UPDATE ${tables.transactions} 
         SET status = 'FAILED' 
         WHERE reference = $1;
       `, [reference]);

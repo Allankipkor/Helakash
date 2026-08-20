@@ -1,59 +1,116 @@
 import { neon } from '@neondatabase/serverless';
 
-const connectionString = process.env.POSTGRES_URL || process.env.DATABASE_URL;
-export const sql = connectionString ? neon(connectionString, { fullResults: true }) : null;
+const databaseUrl = process.env.POSTGRES_URL || process.env.DATABASE_URL;
 
-// Clean and sanitize APP_ID (defaults to 'pawabet')
-const rawAppId = process.env.APP_ID || process.env.TABLE_PREFIX || process.env.SITE_ID || 'pawabet';
-export const APP_ID = rawAppId.toLowerCase().replace(/[^a-z0-9_]/g, '') || 'pawabet';
+if (!databaseUrl) {
+  console.warn("⚠️ Neon Database connection string not found in POSTGRES_URL or DATABASE_URL environment variables.");
+}
 
-// Table names isolated per application / website
-export const TABLES = {
-  users: `${APP_ID}_users`,
-  transactions: `${APP_ID}_transactions`,
-  settings: `${APP_ID}_settings`,
-  active_rounds: `${APP_ID}_active_rounds`,
-  webhook_logs: `${APP_ID}_webhook_logs`,
-};
+export const sql = databaseUrl ? neon(databaseUrl) : null;
 
 /**
- * Execute a parameterized query with dynamic table names
+ * Dynamically determines the active application ID.
+ * Priority:
+ * 1. process.env.APP_ID / TABLE_PREFIX / SITE_ID
+ * 2. Host header from incoming request (e.g. patapesa.com -> patapesa)
+ * 3. Fallback default 'pawabet'
+ * @param {object} [req] - Incoming HTTP request
+ * @returns {string}
+ */
+export function getAppId(req) {
+  if (process.env.APP_ID) {
+    return process.env.APP_ID.toLowerCase().replace(/[^a-z0-9_]/g, '');
+  }
+  if (process.env.TABLE_PREFIX) {
+    return process.env.TABLE_PREFIX.toLowerCase().replace(/[^a-z0-9_]/g, '');
+  }
+  if (process.env.SITE_ID) {
+    return process.env.SITE_ID.toLowerCase().replace(/[^a-z0-9_]/g, '');
+  }
+  
+  if (req && req.headers && req.headers.host) {
+    const host = req.headers.host.toLowerCase();
+    const knownSites = ['luckywin', 'helakash', 'patapesa', 'shindamax', 'pawabet', 'statpesa', 'pesakash', 'patpesa', 'kwetubet'];
+    for (const site of knownSites) {
+      if (host.includes(site)) {
+        return site;
+      }
+    }
+    const cleanHost = host.split(':')[0].split('.')[0].replace(/[^a-z0-9_]/g, '');
+    if (cleanHost && cleanHost !== 'localhost' && cleanHost !== '127') {
+      return cleanHost;
+    }
+  }
+
+  return 'pawabet';
+}
+
+/**
+ * Get isolated table names for the request
+ * @param {object} [req]
+ */
+export function getTables(req) {
+  const appId = getAppId(req);
+  return {
+    users: `${appId}_users`,
+    transactions: `${appId}_transactions`,
+    settings: `${appId}_settings`,
+    active_rounds: `${appId}_active_rounds`,
+    webhook_logs: `${appId}_webhook_logs`,
+  };
+}
+
+export const APP_ID = getAppId();
+export const TABLES = getTables();
+
+/**
+ * Execute a parameterized query with dynamic table names, normalized to always return { rows: [...] }
  * @param {string} text - SQL statement with $1, $2 placeholders
  * @param {Array} params - Parameter values
- * @returns {Promise<any>}
+ * @returns {Promise<{ rows: Array<any> }>}
  */
 export async function query(text, params = []) {
   if (!sql) {
     throw new Error('Database connection string is missing. Please configure POSTGRES_URL or DATABASE_URL in environment variables.');
   }
-  return await sql.query(text, params);
+  const result = await sql.query(text, params);
+  
+  if (Array.isArray(result)) {
+    return { rows: result };
+  }
+  if (result && Array.isArray(result.rows)) {
+    return result;
+  }
+  return { rows: result ? [result] : [] };
 }
 
 /**
  * Initialize all database tables and seed defaults for this specific APP_ID
+ * @param {object} [req]
  */
-export async function initAppDatabase() {
+export async function initAppDatabase(req) {
   if (!sql) {
     throw new Error('Database connection string is missing.');
   }
 
+  const appId = getAppId(req);
+  const tables = getTables(req);
+
   // 1. Users Table
   await query(`
-    CREATE TABLE IF NOT EXISTS ${TABLES.users} (
+    CREATE TABLE IF NOT EXISTS ${tables.users} (
       phone VARCHAR(15) PRIMARY KEY,
       password_hash VARCHAR(255) NOT NULL,
       balance DECIMAL(12, 2) DEFAULT 0.00,
       created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
     );
   `);
-  await query(`ALTER TABLE ${TABLES.users} ADD COLUMN IF NOT EXISTS password_hash VARCHAR(255);`);
-  await query(`ALTER TABLE ${TABLES.users} ALTER COLUMN balance SET DEFAULT 0.00;`);
 
   // 2. Transactions Table
   await query(`
-    CREATE TABLE IF NOT EXISTS ${TABLES.transactions} (
+    CREATE TABLE IF NOT EXISTS ${tables.transactions} (
       id SERIAL PRIMARY KEY,
-      phone VARCHAR(15) REFERENCES ${TABLES.users}(phone),
+      phone VARCHAR(15) REFERENCES ${tables.users}(phone),
       type VARCHAR(30) NOT NULL,
       amount DECIMAL(12, 2) NOT NULL,
       status VARCHAR(20) DEFAULT 'PENDING',
@@ -64,7 +121,7 @@ export async function initAppDatabase() {
 
   // 3. Webhook Logs Table
   await query(`
-    CREATE TABLE IF NOT EXISTS ${TABLES.webhook_logs} (
+    CREATE TABLE IF NOT EXISTS ${tables.webhook_logs} (
       id SERIAL PRIMARY KEY,
       payload JSONB NOT NULL,
       created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
@@ -73,7 +130,7 @@ export async function initAppDatabase() {
 
   // 4. Active Rounds Table
   await query(`
-    CREATE TABLE IF NOT EXISTS ${TABLES.active_rounds} (
+    CREATE TABLE IF NOT EXISTS ${tables.active_rounds} (
       phone VARCHAR(30) PRIMARY KEY,
       crash_point DECIMAL(12, 2) NOT NULL,
       crash_point_2 DECIMAL(12, 2) NOT NULL,
@@ -85,14 +142,14 @@ export async function initAppDatabase() {
 
   // Seed default active rounds for APP_ID
   await query(`
-    INSERT INTO ${TABLES.active_rounds} (phone, crash_point, crash_point_2, crash_point_3, status)
+    INSERT INTO ${tables.active_rounds} (phone, crash_point, crash_point_2, crash_point_3, status)
     VALUES ($1, 1.50, 2.20, 1.30, 'ACTIVE')
     ON CONFLICT (phone) DO NOTHING;
-  `, [APP_ID]);
+  `, [appId]);
 
   // 5. Settings Table
   await query(`
-    CREATE TABLE IF NOT EXISTS ${TABLES.settings} (
+    CREATE TABLE IF NOT EXISTS ${tables.settings} (
       id VARCHAR(50) PRIMARY KEY,
       min_deposit DECIMAL(12, 2) DEFAULT 300.00,
       min_withdrawal DECIMAL(12, 2) DEFAULT 500.00,
@@ -107,14 +164,14 @@ export async function initAppDatabase() {
 
   // Seed default settings row for this APP_ID
   await query(`
-    INSERT INTO ${TABLES.settings} (id, min_deposit, min_withdrawal, min_stake, admin_passcode)
+    INSERT INTO ${tables.settings} (id, min_deposit, min_withdrawal, min_stake, admin_passcode)
     VALUES ($1, 300.00, 500.00, 400.00, 'Aa@123')
     ON CONFLICT (id) DO NOTHING;
-  `, [APP_ID]);
+  `, [appId]);
 
   return {
     success: true,
-    appId: APP_ID,
-    tables: TABLES
+    appId: appId,
+    tables: tables
   };
 }

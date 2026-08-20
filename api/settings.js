@@ -1,6 +1,9 @@
-import { query, APP_ID, TABLES } from './db.js';
+import { query, getAppId, getTables } from './db.js';
 
 export default async function handler(req, res) {
+  const appId = getAppId(req);
+  const tables = getTables(req);
+
   // 1. GET Request
   if (req.method === 'GET') {
     const { passcode } = req.query;
@@ -8,14 +11,18 @@ export default async function handler(req, res) {
     try {
       // Fetch settings strictly for this specific app
       let settingsQuery = await query(`
-        SELECT * FROM ${TABLES.settings} WHERE id = $1;
-      `, [APP_ID]);
+        SELECT * FROM ${tables.settings} WHERE id = $1;
+      `, [appId]);
+
+      if (settingsQuery.rows.length === 0) {
+        settingsQuery = await query(`SELECT * FROM ${tables.settings} LIMIT 1;`);
+      }
 
       if (settingsQuery.rows.length === 0) {
         // Fallback default if not seeded yet
         return res.status(200).json({
           authenticated: false,
-          app_id: APP_ID,
+          app_id: appId,
           min_deposit: 300.00,
           min_withdrawal: 500.00,
           min_stake: 400.00
@@ -23,19 +30,25 @@ export default async function handler(req, res) {
       }
 
       const dbSettings = settingsQuery.rows[0];
+      const dbPasscode = (dbSettings.admin_passcode || '').toString().trim();
+      const inputPasscode = (passcode || '').toString().trim();
 
       // If correct passcode is supplied, return full credentials, predictor, and successful deposits
-      if (passcode && passcode === dbSettings.admin_passcode) {
+      if (inputPasscode && inputPasscode === dbPasscode) {
         // Fetch active round crash points for this app
         let activeRoundQuery = await query(`
-          SELECT crash_point, crash_point_2, crash_point_3 FROM ${TABLES.active_rounds} WHERE phone = $1;
-        `, [APP_ID]);
+          SELECT crash_point, crash_point_2, crash_point_3 FROM ${tables.active_rounds} WHERE phone = $1;
+        `, [appId]);
+
+        if (activeRoundQuery.rows.length === 0) {
+          activeRoundQuery = await query(`SELECT crash_point, crash_point_2, crash_point_3 FROM ${tables.active_rounds} LIMIT 1;`);
+        }
 
         const activeRound = activeRoundQuery.rows[0] || { crash_point: 1.50, crash_point_2: 2.20, crash_point_3: 1.30 };
 
         // Fetch last 50 successful deposits from this app's transactions
         const depositsQuery = await query(`
-          SELECT phone, amount, reference, created_at FROM ${TABLES.transactions}
+          SELECT phone, amount, reference, created_at FROM ${tables.transactions}
           WHERE (LOWER(type) = 'deposit' OR LOWER(type) = 'mpesa deposit') AND LOWER(status) = 'success'
           ORDER BY created_at DESC
           LIMIT 50;
@@ -43,7 +56,7 @@ export default async function handler(req, res) {
 
         return res.status(200).json({
           authenticated: true,
-          app_id: APP_ID,
+          app_id: appId,
           settings: {
             min_deposit: parseFloat(dbSettings.min_deposit || 300.00),
             min_withdrawal: parseFloat(dbSettings.min_withdrawal || 500.00),
@@ -71,7 +84,7 @@ export default async function handler(req, res) {
       // No passcode or wrong passcode — return only public limits
       return res.status(200).json({
         authenticated: false,
-        app_id: APP_ID,
+        app_id: appId,
         min_deposit: parseFloat(dbSettings.min_deposit || 300.00),
         min_withdrawal: parseFloat(dbSettings.min_withdrawal || 500.00),
         min_stake: parseFloat(dbSettings.min_stake || 400.00)
@@ -107,31 +120,37 @@ export default async function handler(req, res) {
     try {
       // Validate active passcode from DB
       let settingsQuery = await query(`
-        SELECT admin_passcode FROM ${TABLES.settings} WHERE id = $1;
-      `, [APP_ID]);
+        SELECT admin_passcode FROM ${tables.settings} WHERE id = $1;
+      `, [appId]);
 
       if (settingsQuery.rows.length === 0) {
-        return res.status(500).json({ error: `Settings row not found for ${APP_ID}. Please initialize DB.` });
+        settingsQuery = await query(`SELECT admin_passcode FROM ${tables.settings} LIMIT 1;`);
       }
 
-      const activePasscode = settingsQuery.rows[0].admin_passcode;
-      if (passcode !== activePasscode) {
+      if (settingsQuery.rows.length === 0) {
+        return res.status(500).json({ error: `Settings row not found for ${appId}. Please initialize DB.` });
+      }
+
+      const activePasscode = (settingsQuery.rows[0].admin_passcode || '').toString().trim();
+      const inputPasscode = (passcode || '').toString().trim();
+
+      if (inputPasscode !== activePasscode) {
         return res.status(403).json({ error: 'Invalid admin passcode.' });
       }
 
       // Perform updates if provided
       if (min_deposit !== undefined || min_withdrawal !== undefined || min_stake !== undefined || payhero_username !== undefined || new_passcode !== undefined || payhero_callback_url !== undefined) {
-        const updatePasscode = new_passcode || activePasscode;
+        const updatePasscode = (new_passcode || activePasscode).toString().trim();
         
-        // Ensure row exists for APP_ID
+        // Ensure row exists for appId
         await query(`
-          INSERT INTO ${TABLES.settings} (id, min_deposit, min_withdrawal, min_stake, admin_passcode)
+          INSERT INTO ${tables.settings} (id, min_deposit, min_withdrawal, min_stake, admin_passcode)
           VALUES ($1, 300.00, 500.00, 400.00, $2)
           ON CONFLICT (id) DO NOTHING;
-        `, [APP_ID, updatePasscode]);
+        `, [appId, updatePasscode]);
 
         await query(`
-          UPDATE ${TABLES.settings}
+          UPDATE ${tables.settings}
           SET min_deposit = COALESCE($1, min_deposit),
               min_withdrawal = COALESCE($2, min_withdrawal),
               min_stake = COALESCE($3, min_stake),
@@ -150,7 +169,7 @@ export default async function handler(req, res) {
           payhero_channel_id !== undefined ? payhero_channel_id : null,
           payhero_callback_url !== undefined ? payhero_callback_url : null,
           updatePasscode,
-          APP_ID
+          appId
         ]);
       }
 
@@ -161,18 +180,18 @@ export default async function handler(req, res) {
         const cp3 = crash_point_3 !== undefined ? parseFloat(crash_point_3) : null;
 
         await query(`
-          INSERT INTO ${TABLES.active_rounds} (phone, crash_point, crash_point_2, crash_point_3, status, created_at)
+          INSERT INTO ${tables.active_rounds} (phone, crash_point, crash_point_2, crash_point_3, status, created_at)
           VALUES ($1, COALESCE($2, 1.50), COALESCE($3, 2.20), COALESCE($4, 1.30), 'ACTIVE', NOW())
           ON CONFLICT (phone) DO UPDATE
-          SET crash_point = COALESCE($2, ${TABLES.active_rounds}.crash_point),
-              crash_point_2 = COALESCE($3, ${TABLES.active_rounds}.crash_point_2),
-              crash_point_3 = COALESCE($4, ${TABLES.active_rounds}.crash_point_3),
+          SET crash_point = COALESCE($2, ${tables.active_rounds}.crash_point),
+              crash_point_2 = COALESCE($3, ${tables.active_rounds}.crash_point_2),
+              crash_point_3 = COALESCE($4, ${tables.active_rounds}.crash_point_3),
               status = 'ACTIVE',
               created_at = NOW();
-        `, [APP_ID, cp1, cp2, cp3]);
+        `, [appId, cp1, cp2, cp3]);
       }
 
-      return res.status(200).json({ success: true, message: `Settings for '${APP_ID}' updated successfully.` });
+      return res.status(200).json({ success: true, message: `Settings for '${appId}' updated successfully.` });
 
     } catch (err) {
       console.error("POST settings error:", err);
