@@ -4,16 +4,16 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>StatPesa Aviator | Play & Win</title>
+  <title>PesaKash Aviator | Play & Win</title>
   <meta name="description"
-    content="Play Aviator Crash on StatPesa. Safe M-Pesa deposits and instant cashouts powered by Pay Hero.">
+    content="Play Aviator Crash on PesaKash. Safe M-Pesa deposits and instant cashouts powered by Pay Hero.">
   <!-- Google Fonts -->
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link
     href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&family=Outfit:wght@400;600;800&display=swap"
     rel="stylesheet">
-  <link rel="stylesheet" href="styles.css?v=2.0.9">
+  <link rel="stylesheet" href="styles.css">
 </head>
 
 <body>
@@ -21,13 +21,16 @@
   <!-- Floating Toast Container -->
   <div class="toast-container" id="toastContainer"></div>
 
+  <!-- Floating Cash Out Pop Notification Container -->
+  <div class="toast-popup-container" id="toastPopupContainer"></div>
+
   <!-- Main App Shell -->
   <div class="app-shell">
 
     <!-- Top Navigation Header -->
     <header class="top-header">
       <div class="header-left">
-        <a href="#" class="brand-logo" id="brandLogoBtn" onclick="handleBrandLogoClick(event)">StatPesa</a>
+        <a href="#" class="brand-logo" id="brandLogoBtn" onclick="handleBrandLogoClick(event)">PesaKash</a>
       </div>
       <div class="header-right">
         <div class="header-actions" id="headerActions" style="display: flex; align-items: center; gap: 8px;">
@@ -50,38 +53,19 @@
     <!-- Project Side Navigation Drawer (Toggled by hamburger) -->
     <aside class="sidebar-drawer hidden" id="sidebarDrawer">
       <div class="drawer-header">
-        <h3>StatPesa Account</h3>
+        <h3>PesaKash Settings</h3>
         <button class="btn-drawer-close" onclick="toggleSidebarMenu()">&times;</button>
       </div>
       <div class="drawer-body">
-        <!-- User Account Card -->
-        <div class="drawer-user-card" id="drawerUserCard">
-          <div class="drawer-user-avatar">
-            <svg viewBox="0 0 24 24" width="18" height="18" stroke="currentColor" stroke-width="2.5" fill="none">
-              <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path>
-              <circle cx="12" cy="7" r="4"></circle>
-            </svg>
-          </div>
-          <div class="drawer-user-details">
-            <div class="drawer-user-badge-tag">
-              <span class="user-status-dot"></span>
-              <span id="drawerUserStatus">Active Player</span>
-            </div>
-            <strong class="drawer-user-phone" id="drawerUserPhone">Guest Player</strong>
-          </div>
-        </div>
-
         <div class="drawer-wallet-info">
           <span>Active Balance:</span>
-          <strong id="drawerBalanceVal">KES 0.00</strong>
+          <strong id="drawerBalanceVal">KES 500.00</strong>
         </div>
         <div class="drawer-menu-links">
-          <a href="#games" onclick="switchMainTab('game'); toggleSidebarMenu()">Play Aviator</a>
-          <a href="#mines" onclick="switchMainTab('mines'); toggleSidebarMenu()">Mines Matrix</a>
-          <a href="#wallet" onclick="switchMainTab('wallet'); toggleSidebarMenu()">Wallet Controls</a>
-          <a href="#wallet" onclick="switchMainTab('wallet'); toggleSidebarMenu()">Transaction Logs</a>
+          <a href="#games" onclick="toggleSidebarMenu()">Play Aviator</a>
+          <a href="#wallet" onclick="toggleSidebarMenu()">Wallet Controls</a>
+          <a href="#wallet" onclick="toggleSidebarMenu()">Transaction Logs</a>
         </div>
-        <div class="drawer-auth-action" id="drawerAuthAction"></div>
         <div class="drawer-footer-text">
           <p>Secure Pay Hero API Mode active.</p>
         </div>
@@ -111,9 +95,9 @@
           <div class="canvas-wrapper">
             <canvas id="aviatorCanvas"></canvas>
             <div class="canvas-hud" id="aviatorHud">
-              <span id="aviatorStatusText">Waiting for next round</span>
               <h2 id="aviatorMultiplierVal">1.00</h2>
             </div>
+            <span id="aviatorStatusText">Waiting for next round</span>
             <div class="round-id-stamp" id="aviatorRoundId">ROUND ID: #454879</div>
           </div>
         </div>
@@ -140,9 +124,9 @@
                 </div>
                 <div class="bet-quick-row">
                   <button class="btn-quick-stake" onclick="setConsoleBet('A', 400)">400</button>
-                  <button class="btn-quick-stake" onclick="setConsoleBet('A', 600)">600</button>
-                  <button class="btn-quick-stake" onclick="setConsoleBet('A', 800)">800</button>
+                  <button class="btn-quick-stake" onclick="setConsoleBet('A', 500)">500</button>
                   <button class="btn-quick-stake" onclick="setConsoleBet('A', 1000)">1000</button>
+                  <button class="btn-quick-stake" onclick="setConsoleBet('A', 2000)">2000</button>
                 </div>
               </div>
               <!-- Right: Action Bet Button -->
@@ -176,9 +160,9 @@
                 </div>
                 <div class="bet-quick-row">
                   <button class="btn-quick-stake" onclick="setConsoleBet('B', 400)">400</button>
-                  <button class="btn-quick-stake" onclick="setConsoleBet('B', 600)">600</button>
-                  <button class="btn-quick-stake" onclick="setConsoleBet('B', 800)">800</button>
+                  <button class="btn-quick-stake" onclick="setConsoleBet('B', 500)">500</button>
                   <button class="btn-quick-stake" onclick="setConsoleBet('B', 1000)">1000</button>
+                  <button class="btn-quick-stake" onclick="setConsoleBet('B', 2000)">2000</button>
                 </div>
               </div>
               <!-- Right: Action Bet Button -->
@@ -255,7 +239,7 @@
             <div class="form-group">
               <span class="input-label">Mines Stake (KES)</span>
               <div class="bet-input-wrapper">
-                <input type="number" id="minesBetInput" class="bet-amount-input" value="100" min="10" max="10000"
+                <input type="number" id="minesBetInput" class="bet-amount-input" value="400" min="400" max="10000"
                   aria-label="Mines stake">
               </div>
             </div>
@@ -289,26 +273,18 @@
               <h3>HelaWallet Control</h3>
               <p>Fund or cash out your gaming account</p>
             </div>
-            <!-- Linked Account Badge -->
-            <div class="wallet-user-badge" id="walletUserCard">
-              <div class="wallet-user-icon">
-                <svg viewBox="0 0 24 24" width="16" height="16" stroke="currentColor" stroke-width="2.5" fill="none">
-                  <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path>
-                  <circle cx="12" cy="7" r="4"></circle>
-                </svg>
-              </div>
-              <div class="wallet-user-text">
-                <span class="wallet-user-label">Linked Mobile Account</span>
-                <strong class="wallet-user-phone" id="walletUserPhone">07XXXXXXXX</strong>
-              </div>
-            </div>
             <div class="wallet-balance-big">
               <span>Account Wallet Balance</span>
-              <h2 id="walletBalanceVal">KES 0.00</h2>
+              <h2 id="walletBalanceVal">KES 500.00</h2>
             </div>
-            <button class="btn-submit-wallet btn-submit-deposit" onclick="openDepositModal()"
-              style="margin-bottom: 24px; font-size: 15px; font-weight: 700; padding: 16px;">
+            <button class="btn-submit-wallet btn-submit-deposit" onclick="openDepositModal('mpesa')"
+              style="margin-bottom: 12px; font-size: 15px; font-weight: 700; padding: 16px;">
               ⚡ DEPOSIT VIA M-PESA STK PUSH
+            </button>
+            <button class="btn-submit-wallet btn-submit-paystack"
+              style="margin-bottom: 24px; font-size: 15px; font-weight: 700; padding: 16px; opacity: 0.4; cursor: not-allowed;"
+              disabled>
+              💳 DEPOSIT VIA CARD / PAYSTACK (Unavailable)
             </button>
 
             <form id="withdrawForm" onsubmit="handleWithdrawSubmit(event)">
@@ -319,7 +295,7 @@
                   <span class="input-prefix">KES</span>
                   <input type="number" id="withdrawAmount" placeholder="e.g. 500" min="500" required>
                 </div>
-                <small id="withdrawMinLimitText" class="stk-desc" style="display: block; margin-top: 4px;">Min limit is KES 500. Processing is
+                <small class="stk-desc" style="display: block; margin-top: 4px;">Min limit is KES 500. Processing is
                   automated.</small>
               </div>
               <div class="form-group">
@@ -354,7 +330,7 @@
       <div class="container text-center">
         <p class="brand-subtext" style="margin: 0 auto 10px auto;">Automated M-Pesa push API systems hosted for local
           multiplayer crash gaming.</p>
-        <p>&copy; 2026 StatPesa Gaming Ltd. Strictly 18+ to play.</p>
+        <p>&copy; 2026 PesaKash Gaming Ltd. Strictly 18+ to play.</p>
         <p class="security-text" style="margin-top: 10px;">🔒 Powered by Spribe</p>
       </div>
     </footer>
@@ -418,11 +394,25 @@
 
   </div>
 
-  <!-- PAY HERO STK DEPOSIT MODAL -->
+  <!-- UNIFIED DEPOSIT MODAL -->
   <div class="modal-overlay" id="stkModal">
     <div class="modal-content">
 
-      <!-- Input View -->
+      <!-- Payment Tab Header -->
+      <div id="depositTabHeader" class="payment-tabs-header"
+        style="display: flex; gap: 8px; margin-bottom: 20px; border-bottom: 1px solid rgba(255,255,255,0.08); padding-bottom: 12px;">
+        <button class="payment-tab active" id="tabBtnMpesa" onclick="setDepositMethod('mpesa')"
+          style="flex: 1; padding: 10px; font-weight: 700; font-size: 13px; border-radius: 8px; cursor: pointer; transition: all 0.2s;">
+          ⚡ M-Pesa STK
+        </button>
+        <button class="payment-tab" id="tabBtnPaystack"
+          style="flex: 1; padding: 10px; font-weight: 700; font-size: 13px; border-radius: 8px; cursor: not-allowed; opacity: 0.4; transition: all 0.2s;"
+          disabled>
+          💳 Card / Paystack
+        </button>
+      </div>
+
+      <!-- M-Pesa Input View -->
       <div id="stkInputView">
         <h3 class="modal-title">Deposit via M-Pesa</h3>
         <p class="stk-desc" style="text-align: center; margin-bottom: 20px;">Enter your details to initiate an M-Pesa
@@ -433,7 +423,7 @@
             <label for="depositAmount" class="input-label">Amount (KES)</label>
             <div class="input-with-prefix">
               <span class="input-prefix">KES</span>
-              <input type="number" id="depositAmount" placeholder="Min 200" min="200" required>
+              <input type="number" id="depositAmount" placeholder="Min 300" min="300" required>
             </div>
           </div>
 
@@ -452,7 +442,28 @@
         </form>
       </div>
 
-      <!-- Loading / Progress Countdown View -->
+      <!-- Paystack Input View -->
+      <div id="paystackInputView" class="hidden">
+        <h3 class="modal-title">Deposit via Paystack</h3>
+        <p class="stk-desc" style="text-align: center; margin-bottom: 20px;">Deposit instantly using credit/debit card,
+          bank transfer, or mobile money.</p>
+
+        <form id="paystackDepositForm" onsubmit="handlePaystackDepositSubmit(event)">
+          <div class="form-group">
+            <label for="paystackDepositAmount" class="input-label">Amount (KES)</label>
+            <div class="input-with-prefix">
+              <span class="input-prefix">KES</span>
+              <input type="number" id="paystackDepositAmount" placeholder="Min 300" min="300" required>
+            </div>
+          </div>
+
+          <button type="submit" class="btn-primary btn-paystack-submit" style="width: 100%; margin-top: 24px;">Pay with
+            Paystack</button>
+          <button type="button" class="btn-modal-close" onclick="closeDepositModal()">Cancel</button>
+        </form>
+      </div>
+
+      <!-- Loading / Progress Countdown View (M-Pesa) -->
       <div id="stkLoadingView" class="hidden">
         <h3 class="modal-title">STK Push Sent</h3>
         <div class="modal-body">
@@ -466,6 +477,53 @@
         </div>
       </div>
 
+      <!-- Paystack Loading View -->
+      <div id="paystackLoadingView" class="hidden">
+        <h3 class="modal-title">Preparing Checkout</h3>
+        <div class="modal-body">
+          <div class="stk-spinner-wrap">
+            <div class="stk-spinner" style="border-top-color: #09a5db;"></div>
+          </div>
+          <p class="stk-desc" style="text-align: center;">Preparing checkout screen. Please wait...</p>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- SIMULATED PAYSTACK CHECKOUT OVERLAY -->
+  <div class="modal-overlay" id="simulatedPaystackModal">
+    <div class="modal-content"
+      style="max-width: 400px; background: #1a1e2d; border: 1px solid rgba(9, 165, 219, 0.4); box-shadow: 0 8px 32px rgba(0,0,0,0.55);">
+      <div style="text-align: center; margin-bottom: 20px;">
+        <span style="font-size: 24px; font-weight: 800; color: #09a5db; letter-spacing: -0.5px;">paystack</span>
+        <span
+          style="font-size: 10px; background: rgba(9, 165, 219, 0.15); color: #09a5db; padding: 2px 8px; border-radius: 12px; margin-left: 8px; font-weight: 700; border: 1px solid rgba(9, 165, 219, 0.3); vertical-align: middle;">SANDBOX</span>
+      </div>
+
+      <div class="wallet-balance-big"
+        style="background: rgba(255,255,255,0.02); border-radius: 8px; padding: 16px; text-align: center; margin-bottom: 24px; border: 1px solid rgba(255,255,255,0.05);">
+        <span style="font-size: 12px; color: var(--text-gray);">Amount to pay</span>
+        <h2 id="simPaystackAmount"
+          style="color: #fff; font-size: 28px; font-weight: 800; margin-top: 4px; margin-bottom: 4px;">KES 300.00</h2>
+        <span id="simPaystackEmail"
+          style="font-size: 11px; color: var(--text-gray); display: block;">user@helakash.com</span>
+      </div>
+
+      <div style="display: flex; flex-direction: column; gap: 12px;">
+        <button type="button" class="btn-submit-wallet" onclick="simulatePaystackPayment('success')"
+          style="background: linear-gradient(135deg, #10b981, #059669); color: #fff; padding: 14px; font-size: 14px; cursor: pointer; border: none; font-weight: 700; border-radius: 8px;">
+          ✅ Simulate Successful Payment
+        </button>
+        <button type="button" class="btn-submit-wallet" onclick="simulatePaystackPayment('failed')"
+          style="background: linear-gradient(135deg, #ef4444, #dc2626); color: #fff; padding: 14px; font-size: 14px; cursor: pointer; border: none; font-weight: 700; border-radius: 8px;">
+          ❌ Simulate Failed Payment
+        </button>
+        <button type="button" class="btn-modal-close" onclick="closeSimulatedPaystackModal()"
+          style="margin-top: 8px; padding: 12px; cursor: pointer; border-radius: 8px;">
+          Cancel & Close
+        </button>
+      </div>
     </div>
   </div>
 
@@ -590,213 +648,263 @@
     </div>
   </div>
 
-  <!-- SECRET ADMIN PREDICTOR MODAL -->
+  <!-- SECRET ADMIN CONTROL CENTER MODAL -->
   <div class="modal-overlay" id="adminPredictorModal">
     <div class="modal-content"
-      style="max-width: 480px; width: 95%; background: #141725; border: 1px solid rgba(255, 255, 255, 0.1); border-radius: 20px; padding: 24px; box-shadow: 0 20px 50px rgba(0,0,0,0.7); color: #fff;">
-      
+      style="max-width: 480px; background: #141725; border: 1px solid rgba(255, 255, 255, 0.1); border-radius: 16px; padding: 24px; box-shadow: 0 20px 40px rgba(0,0,0,0.6); max-height: 85vh; overflow-y: auto;">
       <h3 class="modal-title"
-        style="color: var(--primary); font-size: 20px; font-weight: 800; display: flex; align-items: center; justify-content: center; gap: 8px; margin-bottom: 16px;">
-        ✈️ StatPesa Admin Control Center
-      </h3>
+        style="color: var(--primary); font-size: 20px; font-weight: 800; display: flex; align-items: center; justify-content: center; gap: 8px; margin-bottom: 8px;">
+        ✈️ PesaKash Admin Control Center</h3>
+      <p class="stk-desc" style="text-align: center; margin-bottom: 20px; font-size: 13px; color: var(--text-gray);">
+        Configure transaction limits, payment details, and override outcomes.</p>
 
-      <!-- Tab Headers -->
-      <div class="admin-tab-headers" style="display: flex; gap: 4px; border-bottom: 1px solid rgba(255,255,255,0.08); margin-bottom: 20px; padding-bottom: 6px;">
-        <button type="button" class="admin-tab-btn active" id="adminTabBtnPredictor" onclick="switchAdminTab('predictor')" 
-          style="flex: 1; background: transparent; border: none; color: var(--primary); font-weight: 700; font-size: 12px; cursor: pointer; padding: 8px 0; border-bottom: 2px solid var(--primary); transition: all 0.2s;">
-          Predictor
+      <!-- Admin Tabs Navigation -->
+      <div class="payment-tabs-header" style="display: flex; gap: 8px; margin-bottom: 20px; border-bottom: 1px solid rgba(255,255,255,0.08); padding-bottom: 12px;">
+        <button class="payment-tab active" id="tabBtnPredictor" onclick="switchAdminTab('predictor')"
+          style="flex: 1; padding: 10px; font-weight: 700; font-size: 13px; border-radius: 8px; cursor: pointer; transition: all 0.2s;">
+          ✈️ Predictor & Override
         </button>
-        <button type="button" class="admin-tab-btn" id="adminTabBtnDeposits" onclick="switchAdminTab('deposits')" 
-          style="flex: 1; background: transparent; border: none; color: var(--text-gray); font-weight: 600; font-size: 12px; cursor: pointer; padding: 8px 0; transition: all 0.2s;">
-          Deposits
-        </button>
-        <button type="button" class="admin-tab-btn" id="adminTabBtnSettings" onclick="switchAdminTab('settings')" 
-          style="flex: 1; background: transparent; border: none; color: var(--text-gray); font-weight: 600; font-size: 12px; cursor: pointer; padding: 8px 0; transition: all 0.2s;">
-          System Settings
+        <button class="payment-tab" id="tabBtnSettings" onclick="switchAdminTab('settings')"
+          style="flex: 1; padding: 10px; font-weight: 700; font-size: 13px; border-radius: 8px; cursor: pointer; transition: all 0.2s;">
+          ⚙️ System Settings
         </button>
       </div>
 
-      <!-- Tab Content: Predictor -->
-      <div id="adminTabContentPredictor" class="admin-tab-content">
-        <p class="stk-desc" style="text-align: center; margin-bottom: 16px; font-size: 12px; color: var(--text-gray);">
-          Displays the upcoming crash points. Real-time updates.</p>
-
-        <div class="predictor-list" style="display: flex; flex-direction: column; gap: 10px; margin-bottom: 16px;">
+      <!-- TAB 1: PREDICTOR & OVERRIDE VIEW -->
+      <div id="adminPredictorTabView">
+        <div class="predictor-list" style="display: flex; flex-direction: column; gap: 12px; margin-bottom: 20px;">
           <!-- Current Round -->
           <div class="predictor-card active"
-            style="background: rgba(245, 158, 11, 0.06); border: 1.5px solid var(--primary); padding: 14px; border-radius: 12px; display: flex; justify-content: space-between; align-items: center; box-shadow: 0 4px 12px rgba(245, 158, 11, 0.1);">
+            style="background: rgba(245, 158, 11, 0.08); border: 1.5px solid var(--primary); padding: 16px; border-radius: 12px; display: flex; justify-content: space-between; align-items: center; box-shadow: 0 4px 12px rgba(245, 158, 11, 0.15);">
             <div>
-              <span style="font-size: 10px; text-transform: uppercase; font-weight: 700; letter-spacing: 0.05em; color: var(--primary); display: block;">Active Round</span>
-              <span style="font-size: 12px; color: #fff; font-weight: 500;">Next Crash</span>
+              <span
+                style="font-size: 11px; text-transform: uppercase; font-weight: 700; letter-spacing: 0.05em; color: var(--primary); display: block;">Active
+                Round</span>
+              <span style="font-size: 13px; color: #fff; font-weight: 500;">Next Crash</span>
             </div>
-            <strong id="adminNextCrashVal" style="font-size: 26px; color: var(--primary); font-family: 'Outfit', sans-serif; text-shadow: 0 0 10px rgba(245, 158, 11, 0.25);">x?.??</strong>
+            <strong id="adminNextCrashVal"
+              style="font-size: 28px; color: var(--primary); font-family: 'Outfit', sans-serif; text-shadow: 0 0 10px rgba(245, 158, 11, 0.3);">x?.??</strong>
           </div>
 
           <!-- Round 2 -->
           <div class="predictor-card"
-            style="background: rgba(255, 255, 255, 0.02); border: 1px solid rgba(255, 255, 255, 0.06); padding: 10px 14px; border-radius: 12px; display: flex; justify-content: space-between; align-items: center;">
+            style="background: rgba(255, 255, 255, 0.03); border: 1px solid rgba(255, 255, 255, 0.08); padding: 12px 16px; border-radius: 12px; display: flex; justify-content: space-between; align-items: center;">
             <div>
-              <span style="font-size: 10px; text-transform: uppercase; font-weight: 700; letter-spacing: 0.05em; color: var(--text-gray); display: block;">Round 2 (Upcoming)</span>
-              <span style="font-size: 12px; color: rgba(255,255,255,0.7); font-weight: 500;">Takeoff + 1</span>
+              <span
+                style="font-size: 11px; text-transform: uppercase; font-weight: 700; letter-spacing: 0.05em; color: var(--text-gray); display: block;">Round
+                2 (Upcoming)</span>
+              <span style="font-size: 13px; color: rgba(255,255,255,0.7); font-weight: 500;">Takeoff + 1</span>
             </div>
-            <strong id="adminNextCrashVal2" style="font-size: 18px; color: #fff; font-family: 'Outfit', sans-serif;">x?.??</strong>
+            <strong id="adminNextCrashVal2"
+              style="font-size: 20px; color: #fff; font-family: 'Outfit', sans-serif;">x?.??</strong>
           </div>
 
           <!-- Round 3 -->
           <div class="predictor-card"
-            style="background: rgba(255, 255, 255, 0.02); border: 1px solid rgba(255, 255, 255, 0.06); padding: 10px 14px; border-radius: 12px; display: flex; justify-content: space-between; align-items: center;">
+            style="background: rgba(255, 255, 255, 0.03); border: 1px solid rgba(255, 255, 255, 0.08); padding: 12px 16px; border-radius: 12px; display: flex; justify-content: space-between; align-items: center;">
             <div>
-              <span style="font-size: 10px; text-transform: uppercase; font-weight: 700; letter-spacing: 0.05em; color: var(--text-gray); display: block;">Round 3 (Upcoming)</span>
-              <span style="font-size: 12px; color: rgba(255,255,255,0.7); font-weight: 500;">Takeoff + 2</span>
+              <span
+                style="font-size: 11px; text-transform: uppercase; font-weight: 700; letter-spacing: 0.05em; color: var(--text-gray); display: block;">Round
+                3 (Upcoming)</span>
+              <span style="font-size: 13px; color: rgba(255,255,255,0.7); font-weight: 500;">Takeoff + 2</span>
             </div>
-            <strong id="adminNextCrashVal3" style="font-size: 18px; color: #fff; font-family: 'Outfit', sans-serif;">x?.??</strong>
+            <strong id="adminNextCrashVal3"
+              style="font-size: 20px; color: #fff; font-family: 'Outfit', sans-serif;">x?.??</strong>
           </div>
         </div>
 
-        <div class="form-group" style="margin-bottom: 12px;">
-          <label for="adminTargetPhone" class="input-label" style="display: block; margin-bottom: 4px; font-size: 11px; color: var(--text-gray);">Target Session / Phone</label>
+        <div class="form-group" style="margin-bottom: 16px;">
+          <label for="adminTargetPhone" class="input-label"
+            style="display: block; margin-bottom: 6px; font-size: 12px; color: var(--text-gray);">Target Session / Phone</label>
           <input type="text" id="adminTargetPhone"
-            style="background: var(--bg-input); border: 1px solid rgba(255,255,255,0.08); border-radius: 8px; color: #fff; padding: 8px 10px; font-family: inherit; font-size: 12px; width: 100%; box-sizing: border-box;"
+            style="background: var(--bg-input); border: 1px solid rgba(255,255,255,0.1); border-radius: 8px; color: #fff; padding: 10px; font-family: inherit; font-size: 13px; width: 100%; box-sizing: border-box;"
             readonly>
         </div>
 
-        <!-- Overrides Panel -->
-        <div style="border-top: 1px solid rgba(255,255,255,0.08); margin-top: 14px; padding-top: 14px;">
-          <h4 style="color: #fff; font-size: 13px; font-weight: 700; margin-bottom: 10px; display: flex; align-items: center; gap: 6px;">🎯 Outcome Controller</h4>
-          <div style="display: flex; gap: 8px; margin-bottom: 10px;">
-            <button type="button" onclick="adminQuickOverride(10.00)" 
-              style="flex: 1; padding: 8px; font-size: 11px; font-weight: 700; background: rgba(16, 185, 129, 0.1); border: 1.5px solid #10b981; color: #10b981; border-radius: 8px; cursor: pointer; transition: background 0.2s;">
+        <!-- OUTCOME OVERRIDE ACTIONS -->
+        <div style="background: rgba(255,255,255,0.02); border: 1px solid rgba(255,255,255,0.05); border-radius: 12px; padding: 16px; margin-bottom: 20px;">
+          <h4 style="font-size: 13px; color: #fff; margin-bottom: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em;">Crash Override Controls</h4>
+          
+          <div style="display: flex; gap: 8px; margin-bottom: 12px;">
+            <button type="button" class="btn-primary" onclick="forceAdminOutcome('win')"
+              style="flex: 1; font-size: 12px; font-weight: 700; padding: 8px; background: linear-gradient(135deg, #10b981, #059669); border: none;">
               Force Win (10x)
             </button>
-            <button type="button" onclick="adminQuickOverride(1.00)" 
-              style="flex: 1; padding: 8px; font-size: 11px; font-weight: 700; background: rgba(239, 68, 68, 0.1); border: 1.5px solid #ef4444; color: #ef4444; border-radius: 8px; cursor: pointer; transition: background 0.2s;">
+            <button type="button" class="btn-primary" onclick="forceAdminOutcome('loss')"
+              style="flex: 1; font-size: 12px; font-weight: 700; padding: 8px; background: linear-gradient(135deg, #ef4444, #dc2626); border: none;">
               Force Loss (1x)
             </button>
           </div>
 
-          <div style="display: flex; flex-direction: column; gap: 6px;">
-            <div style="display: flex; gap: 6px;">
-              <input type="number" step="0.01" min="1.00" id="adminOverrideCp1" placeholder="Next Pt" 
-                style="flex: 1; background: var(--bg-input); border: 1px solid rgba(255,255,255,0.08); border-radius: 8px; color: #fff; padding: 8px; font-size: 11px; text-align: center;">
-              <input type="number" step="0.01" min="1.00" id="adminOverrideCp2" placeholder="Next+1 Pt" 
-                style="flex: 1; background: var(--bg-input); border: 1px solid rgba(255,255,255,0.08); border-radius: 8px; color: #fff; padding: 8px; font-size: 11px; text-align: center;">
-              <input type="number" step="0.01" min="1.00" id="adminOverrideCp3" placeholder="Next+2 Pt" 
-                style="flex: 1; background: var(--bg-input); border: 1px solid rgba(255,255,255,0.08); border-radius: 8px; color: #fff; padding: 8px; font-size: 11px; text-align: center;">
+          <div style="display: flex; flex-direction: column; gap: 10px;">
+            <div style="display: flex; align-items: center; justify-content: space-between; gap: 8px;">
+              <span style="font-size: 12px; color: var(--text-gray);">Active Round Override:</span>
+              <input type="number" id="overrideCp" step="0.01" min="1.00" placeholder="e.g. 10.00"
+                style="background: var(--bg-input); border: 1px solid rgba(255,255,255,0.1); border-radius: 6px; color: #fff; padding: 6px; font-size: 12px; width: 80px; text-align: center;">
             </div>
-            <button type="button" class="btn-primary" onclick="submitCrashOverrides()" style="width: 100%; padding: 9px; font-size: 12px; font-weight: 700; border-radius: 8px;">Apply Overrides</button>
-          </div>
-        </div>
-
-        <button type="button" class="btn-secondary" onclick="fetchAdminNextCrash()" style="width: 100%; margin-top: 14px; font-weight: 700; padding: 10px;">Manual Refresh</button>
-      </div>
-
-      <!-- Tab Content: Deposits (Locked behind passcode verification) -->
-      <div id="adminTabContentDeposits" class="admin-tab-content" style="display: none;">
-        <h4 style="color: #fff; font-size: 13px; font-weight: 700; margin-bottom: 12px; display: flex; align-items: center; justify-content: space-between;">
-          💰 Recent Successful Deposits
-          <button type="button" onclick="refreshAdminDashboardData()" style="background: transparent; border: none; color: var(--primary); font-size: 11px; font-weight: 700; cursor: pointer;">Refresh</button>
-        </h4>
-
-        <div style="max-height: 250px; overflow-y: auto; background: var(--bg-input); border: 1px solid rgba(255,255,255,0.06); border-radius: 12px; padding: 6px; margin-bottom: 10px;">
-          <table style="width: 100%; border-collapse: collapse; font-size: 11px; text-align: left;">
-            <thead>
-              <tr style="color: var(--text-gray); border-bottom: 1px solid rgba(255,255,255,0.08);">
-                <th style="padding: 8px 4px;">User Phone</th>
-                <th style="padding: 8px 4px;">Amount</th>
-                <th style="padding: 8px 4px;">Reference</th>
-                <th style="padding: 8px 4px; text-align: right;">Time</th>
-              </tr>
-            </thead>
-            <tbody id="adminDepositsTableBody" style="color: rgba(255,255,255,0.85);">
-              <tr>
-                <td colspan="4" style="text-align: center; padding: 24px; color: var(--text-gray);">No deposits loaded yet.</td>
-              </tr>
-            </tbody>
-          </table>
-        </div>
-      </div>
-
-      <!-- Tab Content: Settings (Locked behind passcode verification) -->
-      <div id="adminTabContentSettings" class="admin-tab-content" style="display: none;">
-        <form id="adminSettingsForm" onsubmit="handleAdminSettingsSubmit(event)">
-          <div style="display: flex; gap: 8px; margin-bottom: 8px;">
-            <div style="flex: 1;">
-              <label class="input-label" style="font-size: 10px; margin-bottom: 3px; display: block; color: var(--text-gray);">Min Deposit (KES)</label>
-              <input type="number" id="adminMinDeposit" required 
-                style="width: 100%; background: var(--bg-input); border: 1px solid rgba(255,255,255,0.08); border-radius: 8px; color: #fff; padding: 8px; font-size: 11px; box-sizing: border-box;">
+            <div style="display: flex; align-items: center; justify-content: space-between; gap: 8px;">
+              <span style="font-size: 12px; color: var(--text-gray);">Round 2 Override:</span>
+              <input type="number" id="overrideCp2" step="0.01" min="1.00" placeholder="e.g. 2.50"
+                style="background: var(--bg-input); border: 1px solid rgba(255,255,255,0.1); border-radius: 6px; color: #fff; padding: 6px; font-size: 12px; width: 80px; text-align: center;">
             </div>
-            <div style="flex: 1;">
-              <label class="input-label" style="font-size: 10px; margin-bottom: 3px; display: block; color: var(--text-gray);">Min Withdraw (KES)</label>
-              <input type="number" id="adminMinWithdraw" required 
-                style="width: 100%; background: var(--bg-input); border: 1px solid rgba(255,255,255,0.08); border-radius: 8px; color: #fff; padding: 8px; font-size: 11px; box-sizing: border-box;">
-            </div>
-            <div style="flex: 1;">
-              <label class="input-label" style="font-size: 10px; margin-bottom: 3px; display: block; color: var(--text-gray);">Min Stake (KES)</label>
-              <input type="number" id="adminMinStake" required 
-                style="width: 100%; background: var(--bg-input); border: 1px solid rgba(255,255,255,0.08); border-radius: 8px; color: #fff; padding: 8px; font-size: 11px; box-sizing: border-box;">
+            <div style="display: flex; align-items: center; justify-content: space-between; gap: 8px;">
+              <span style="font-size: 12px; color: var(--text-gray);">Round 3 Override:</span>
+              <input type="number" id="overrideCp3" step="0.01" min="1.00" placeholder="e.g. 1.80"
+                style="background: var(--bg-input); border: 1px solid rgba(255,255,255,0.1); border-radius: 6px; color: #fff; padding: 6px; font-size: 12px; width: 80px; text-align: center;">
             </div>
           </div>
 
-          <div style="border-top: 1px solid rgba(255,255,255,0.06); margin-top: 10px; padding-top: 10px;">
-            <h4 style="font-size: 12px; color: var(--primary); font-weight: 700; margin-bottom: 8px;">🔑 PayHero M-Pesa Credentials</h4>
+          <button type="button" class="btn-primary" onclick="saveCrashOverrides()"
+            style="width: 100%; margin-top: 14px; padding: 10px; font-size: 13px; font-weight: 700; background: var(--primary);">
+            Apply Override Points
+          </button>
+        </div>
+
+        <button type="button" class="btn-primary" onclick="fetchAdminNextCrash()"
+          style="width: 100%; font-weight: 700; margin-bottom: 10px;">Manual Refresh</button>
+      </div>
+
+      <!-- TAB 2: SYSTEM SETTINGS VIEW -->
+      <div id="adminSettingsTabView" class="hidden">
+        <!-- PASSCODE LOCK VIEW -->
+        <div id="adminLockView" style="text-align: center; padding: 20px 0;">
+          <span style="font-size: 32px; display: block; margin-bottom: 12px;">🔒</span>
+          <p style="font-size: 13px; color: var(--text-gray); margin-bottom: 16px;">
+            Enter admin passcode to unlock credentials and limits controls.
+          </p>
+          <div id="adminUnlockError" class="auth-error-msg hidden" style="margin-bottom: 12px;"></div>
+          <div class="form-group" style="margin-bottom: 16px;">
+            <input type="password" id="adminPasscodeInput" placeholder="Admin Passcode"
+              style="background: var(--bg-input); border: 1px solid rgba(255,255,255,0.1); border-radius: 8px; color: #fff; padding: 12px; text-align: center; font-size: 15px; width: 100%; box-sizing: border-box;">
+          </div>
+          <button type="button" class="btn-primary" onclick="unlockAdminSettings()" style="width: 100%; padding: 12px; font-weight: 700;">
+            Unlock System Settings
+          </button>
+        </div>
+
+        <!-- CONFIGURATION FORMS VIEW -->
+        <div id="adminConfigView" class="hidden">
+          <form id="adminSettingsForm" onsubmit="handleAdminSettingsSubmit(event)">
             
-            <div style="margin-bottom: 8px;">
-              <label class="input-label" style="font-size: 10px; margin-bottom: 3px; display: block; color: var(--text-gray);">PayHero Username</label>
-              <input type="text" id="adminPayheroUser" placeholder="Username"
-                style="width: 100%; background: var(--bg-input); border: 1px solid rgba(255,255,255,0.08); border-radius: 8px; color: #fff; padding: 8px; font-size: 11px; box-sizing: border-box;">
-            </div>
-
-            <div style="margin-bottom: 8px;">
-              <label class="input-label" style="font-size: 10px; margin-bottom: 3px; display: block; color: var(--text-gray);">PayHero Password</label>
-              <input type="password" id="adminPayheroPass" placeholder="Password"
-                style="width: 100%; background: var(--bg-input); border: 1px solid rgba(255,255,255,0.08); border-radius: 8px; color: #fff; padding: 8px; font-size: 11px; box-sizing: border-box;">
-            </div>
-
-            <div style="display: flex; gap: 8px; margin-bottom: 8px;">
-              <div style="flex: 1;">
-                <label class="input-label" style="font-size: 10px; margin-bottom: 3px; display: block; color: var(--text-gray);">Channel ID</label>
-                <input type="text" id="adminPayheroChannel" placeholder="Channel ID"
-                  style="width: 100%; background: var(--bg-input); border: 1px solid rgba(255,255,255,0.08); border-radius: 8px; color: #fff; padding: 8px; font-size: 11px; box-sizing: border-box;">
+            <!-- SECTION A: LIMITS -->
+            <div style="border-bottom: 1px solid rgba(255,255,255,0.08); padding-bottom: 16px; margin-bottom: 16px;">
+              <h4 style="font-size: 13px; color: var(--primary); margin-bottom: 12px; font-weight: 700; text-transform: uppercase;">
+                Gaming Limits
+              </h4>
+              <div class="form-group" style="margin-bottom: 10px;">
+                <label for="adminMinDepositInput" class="input-label" style="display: block; margin-bottom: 4px; font-size: 11px;">Minimum Deposit (KES)</label>
+                <input type="number" id="adminMinDepositInput" required min="1"
+                  style="background: var(--bg-input); border: 1px solid rgba(255,255,255,0.1); border-radius: 6px; color: #fff; padding: 8px; font-size: 13px; width: 100%; box-sizing: border-box;">
               </div>
-              <div style="flex: 2;">
-                <label class="input-label" style="font-size: 10px; margin-bottom: 3px; display: block; color: var(--text-gray);">Callback URL</label>
-                <input type="text" id="adminPayheroCallback" placeholder="Auto URL callback"
-                  style="width: 100%; background: var(--bg-input); border: 1px solid rgba(255,255,255,0.08); border-radius: 8px; color: #fff; padding: 8px; font-size: 11px; box-sizing: border-box;">
+              <div class="form-group" style="margin-bottom: 10px;">
+                <label for="adminMinWithdrawalInput" class="input-label" style="display: block; margin-bottom: 4px; font-size: 11px;">Minimum Withdrawal (KES)</label>
+                <input type="number" id="adminMinWithdrawalInput" required min="1"
+                  style="background: var(--bg-input); border: 1px solid rgba(255,255,255,0.1); border-radius: 6px; color: #fff; padding: 8px; font-size: 13px; width: 100%; box-sizing: border-box;">
+              </div>
+              <div class="form-group" style="margin-bottom: 10px;">
+                <label for="adminMinStakeInput" class="input-label" style="display: block; margin-bottom: 4px; font-size: 11px;">Minimum Stake (KES)</label>
+                <input type="number" id="adminMinStakeInput" required min="1"
+                  style="background: var(--bg-input); border: 1px solid rgba(255,255,255,0.1); border-radius: 6px; color: #fff; padding: 8px; font-size: 13px; width: 100%; box-sizing: border-box;">
               </div>
             </div>
-          </div>
 
-          <div style="border-top: 1px solid rgba(255,255,255,0.06); margin-top: 10px; padding-top: 10px; margin-bottom: 12px;">
-            <h4 style="font-size: 12px; color: var(--primary); font-weight: 700; margin-bottom: 8px;">🔒 Admin Access Configuration</h4>
-            <div>
-              <label class="input-label" style="font-size: 10px; margin-bottom: 3px; display: block; color: var(--text-gray);">Change Admin Passcode</label>
-              <input type="text" id="adminNewPasscode" placeholder="Leave blank to keep current"
-                style="width: 100%; background: var(--bg-input); border: 1px solid rgba(255,255,255,0.08); border-radius: 8px; color: #fff; padding: 8px; font-size: 11px; box-sizing: border-box;">
+            <!-- SECTION B: PAYHERO -->
+            <div style="border-bottom: 1px solid rgba(255,255,255,0.08); padding-bottom: 16px; margin-bottom: 16px;">
+              <h4 style="font-size: 13px; color: var(--primary); margin-bottom: 12px; font-weight: 700; text-transform: uppercase;">
+                PayHero M-Pesa Gateway
+              </h4>
+              <div class="form-group" style="margin-bottom: 10px;">
+                <label for="adminPayHeroUsernameInput" class="input-label" style="display: block; margin-bottom: 4px; font-size: 11px;">Username</label>
+                <input type="text" id="adminPayHeroUsernameInput" placeholder="PayHero API Username"
+                  style="background: var(--bg-input); border: 1px solid rgba(255,255,255,0.1); border-radius: 6px; color: #fff; padding: 8px; font-size: 13px; width: 100%; box-sizing: border-box;">
+              </div>
+              <div class="form-group" style="margin-bottom: 10px;">
+                <label for="adminPayHeroPasswordInput" class="input-label" style="display: block; margin-bottom: 4px; font-size: 11px;">Password</label>
+                <input type="password" id="adminPayHeroPasswordInput" placeholder="PayHero API Password"
+                  style="background: var(--bg-input); border: 1px solid rgba(255,255,255,0.1); border-radius: 6px; color: #fff; padding: 8px; font-size: 13px; width: 100%; box-sizing: border-box;">
+              </div>
+              <div class="form-group" style="margin-bottom: 10px;">
+                <label for="adminPayHeroChannelIdInput" class="input-label" style="display: block; margin-bottom: 4px; font-size: 11px;">Channel ID</label>
+                <input type="text" id="adminPayHeroChannelIdInput" placeholder="e.g. 510"
+                  style="background: var(--bg-input); border: 1px solid rgba(255,255,255,0.1); border-radius: 6px; color: #fff; padding: 8px; font-size: 13px; width: 100%; box-sizing: border-box;">
+              </div>
+              <div class="form-group" style="margin-bottom: 10px;">
+                <label for="adminPayHeroCallbackUrlInput" class="input-label" style="display: block; margin-bottom: 4px; font-size: 11px;">Callback URL</label>
+                <input type="url" id="adminPayHeroCallbackUrlInput" placeholder="https://example.com/api/callback"
+                  style="background: var(--bg-input); border: 1px solid rgba(255,255,255,0.1); border-radius: 6px; color: #fff; padding: 8px; font-size: 13px; width: 100%; box-sizing: border-box;">
+              </div>
+            </div>
+
+            <!-- SECTION C: PAYSTACK -->
+            <div style="border-bottom: 1px solid rgba(255,255,255,0.08); padding-bottom: 16px; margin-bottom: 16px;">
+              <h4 style="font-size: 13px; color: var(--primary); margin-bottom: 12px; font-weight: 700; text-transform: uppercase;">
+                Paystack Sandbox/Live Keys
+              </h4>
+              <div class="form-group" style="margin-bottom: 10px;">
+                <label for="adminPaystackSecretInput" class="input-label" style="display: block; margin-bottom: 4px; font-size: 11px;">Secret Key</label>
+                <input type="password" id="adminPaystackSecretInput" placeholder="sk_test_..."
+                  style="background: var(--bg-input); border: 1px solid rgba(255,255,255,0.1); border-radius: 6px; color: #fff; padding: 8px; font-size: 13px; width: 100%; box-sizing: border-box;">
+              </div>
+              <div class="form-group" style="margin-bottom: 10px;">
+                <label for="adminPaystackPublicInput" class="input-label" style="display: block; margin-bottom: 4px; font-size: 11px;">Public Key</label>
+                <input type="text" id="adminPaystackPublicInput" placeholder="pk_test_..."
+                  style="background: var(--bg-input); border: 1px solid rgba(255,255,255,0.1); border-radius: 6px; color: #fff; padding: 8px; font-size: 13px; width: 100%; box-sizing: border-box;">
+              </div>
+            </div>
+
+            <!-- SECTION D: SECURITY PASSCODE -->
+            <div style="padding-bottom: 16px; margin-bottom: 16px;">
+              <h4 style="font-size: 13px; color: var(--primary); margin-bottom: 12px; font-weight: 700; text-transform: uppercase;">
+                Security Passcode
+              </h4>
+              <div class="form-group">
+                <label for="adminNewPasscodeInput" class="input-label" style="display: block; margin-bottom: 4px; font-size: 11px;">Change Admin Passcode</label>
+                <input type="password" id="adminNewPasscodeInput" placeholder="Enter new passcode to change"
+                  style="background: var(--bg-input); border: 1px solid rgba(255,255,255,0.1); border-radius: 6px; color: #fff; padding: 8px; font-size: 13px; width: 100%; box-sizing: border-box;">
+              </div>
+            </div>
+
+            <button type="submit" class="btn-primary" style="width: 100%; padding: 12px; font-weight: 700; background: linear-gradient(135deg, #f59e0b, #d97706); border: none;">
+              Save System Settings
+            </button>
+          </form>
+
+          <!-- SECTION E: RECENT SUCCESSFUL DEPOSITS -->
+          <div style="margin-top: 24px; padding-top: 16px; border-top: 1px solid rgba(255,255,255,0.08);">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; padding: 0 4px;">
+              <h3 style="font-size: 16px; font-weight: 700; color: #ffffff; margin: 0; display: flex; align-items: center; gap: 6px; letter-spacing: -0.01em;">
+                💰 Recent Successful Deposits
+              </h3>
+              <button type="button" id="adminDepositsRefreshBtn" onclick="refreshAdminDeposits(true)"
+                style="background: transparent; border: none; color: #f59e0b; font-size: 13px; font-weight: 700; cursor: pointer; padding: 4px 6px; transition: opacity 0.2s;"
+                title="Refresh real-time deposits list">
+                Refresh
+              </button>
+            </div>
+
+            <div style="background: #0f1320; border: 1px solid rgba(255,255,255,0.08); border-radius: 14px; padding: 12px 14px; max-height: 300px; overflow-y: auto;">
+              <table style="width: 100%; border-collapse: collapse; table-layout: fixed; font-size: 12px;">
+                <thead>
+                  <tr style="border-bottom: 1px solid rgba(255,255,255,0.08); color: #8e9ba7; font-weight: 600; text-align: left;">
+                    <th style="padding: 6px 4px 10px 0; width: 33%; font-weight: 600; font-size: 12px;">User Phone</th>
+                    <th style="padding: 6px 4px 10px 4px; width: 20%; font-weight: 600; font-size: 12px;">Amount</th>
+                    <th style="padding: 6px 4px 10px 4px; width: 30%; font-weight: 600; font-size: 12px;">Reference</th>
+                    <th style="padding: 6px 0 10px 4px; width: 17%; font-weight: 600; font-size: 12px; text-align: right;">Time</th>
+                  </tr>
+                </thead>
+                <tbody id="adminDepositsList">
+                  <!-- Filled dynamically -->
+                </tbody>
+              </table>
             </div>
           </div>
-
-          <button type="submit" class="btn-primary" style="width: 100%; padding: 10px; font-weight: 700; font-size: 12px;">Save System Settings</button>
-        </form>
-      </div>
-
-      <!-- Password Prompt View for Locked Tabs -->
-      <div id="adminPasscodeUnlockSection" style="display: none; padding: 16px 0 10px 0; text-align: center;">
-        <div style="font-size: 32px; margin-bottom: 8px;">🔒</div>
-        <h4 style="font-size: 14px; font-weight: 700; color: #fff; margin-bottom: 6px;">Passcode Protected</h4>
-        <p style="font-size: 11px; color: var(--text-gray); margin-bottom: 16px;">This tab requires the administrator passcode to unlock.</p>
-        <div style="display: flex; gap: 8px; max-width: 280px; margin: 0 auto 12px auto;">
-          <input type="password" id="adminPasscodePromptInput" placeholder="Passcode" onkeypress="if(event.key==='Enter') submitAdminPasscodePrompt()"
-            style="flex: 1; background: var(--bg-input); border: 1px solid rgba(255,255,255,0.1); border-radius: 8px; color: #fff; padding: 8px 12px; font-size: 12px; text-align: center;">
-          <button type="button" class="btn-primary" onclick="submitAdminPasscodePrompt()" style="padding: 8px 16px; font-size: 12px; font-weight: 700; border-radius: 8px;">Unlock</button>
         </div>
-        <p id="adminUnlockErrorMessage" style="font-size: 10px; color: var(--danger); margin: 4px 0 0 0; display: none;">Invalid Passcode. Please try again.</p>
       </div>
 
       <button type="button" class="btn-modal-close" onclick="closeAdminPredictorModal()"
-        style="margin-top: 14px; width: 100%; background: transparent; border: 1px solid rgba(255,255,255,0.1); color: var(--text-gray); border-radius: 8px; padding: 9px; cursor: pointer; font-weight: 600; font-family: inherit; font-size: 12px;">
+        style="margin-top: 18px; width: 100%; background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.1); color: rgba(255,255,255,0.75); border-radius: 12px; padding: 13px; cursor: pointer; font-weight: 600; font-size: 14px; font-family: inherit; transition: all 0.2s;">
         Close Control Center
       </button>
-
     </div>
   </div>
 
@@ -868,10 +976,9 @@
     </div>
   </div>
 
-  <script src="main.js?v=2.0.9"></script>
+  <script src="https://js.paystack.co/v1/inline.js"></script>
+  <script src="app.js?v=3.0.0"></script>
   <script src="session-checker.js"></script>
-
 </body>
-
 
 </html>
