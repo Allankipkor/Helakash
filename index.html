@@ -293,14 +293,9 @@
               </div>
               <h2 id="walletBalanceVal">KES 0.00</h2>
             </div>
-            <button class="btn-submit-wallet btn-submit-deposit" onclick="openDepositModal('mpesa')"
-              style="margin-bottom: 12px; font-size: 15px; font-weight: 700; padding: 16px;">
+            <button class="btn-submit-wallet btn-submit-deposit" onclick="openDepositModal()"
+              style="margin-bottom: 24px; font-size: 15px; font-weight: 700; padding: 16px;">
               ⚡ DEPOSIT VIA M-PESA STK PUSH
-            </button>
-            <button class="btn-submit-wallet btn-submit-paystack"
-              style="margin-bottom: 24px; font-size: 15px; font-weight: 700; padding: 16px; opacity: 0.4; cursor: not-allowed;"
-              disabled>
-              💳 DEPOSIT VIA CARD / PAYSTACK (Unavailable)
             </button>
 
             <form id="withdrawForm" onsubmit="handleWithdrawSubmit(event)">
@@ -414,25 +409,10 @@
   <div class="modal-overlay" id="stkModal">
     <div class="modal-content">
 
-      <!-- Payment Tab Header -->
-      <div id="depositTabHeader" class="payment-tabs-header"
-        style="display: flex; gap: 8px; margin-bottom: 20px; border-bottom: 1px solid rgba(255,255,255,0.08); padding-bottom: 12px;">
-        <button class="payment-tab active" id="tabBtnMpesa" onclick="setDepositMethod('mpesa')"
-          style="flex: 1; padding: 10px; font-weight: 700; font-size: 13px; border-radius: 8px; cursor: pointer; transition: all 0.2s;">
-          ⚡ M-Pesa STK
-        </button>
-        <button class="payment-tab" id="tabBtnPaystack"
-          style="flex: 1; padding: 10px; font-weight: 700; font-size: 13px; border-radius: 8px; cursor: not-allowed; opacity: 0.4; transition: all 0.2s;"
-          disabled>
-          💳 Card / Paystack
-        </button>
-      </div>
-
       <!-- M-Pesa Input View -->
       <div id="stkInputView">
         <h3 class="modal-title">Deposit via M-Pesa</h3>
-        <p class="stk-desc" style="text-align: center; margin-bottom: 20px;">Enter your details to initiate an M-Pesa
-          STK PIN prompt on your phone.</p>
+        <p class="stk-desc" style="text-align: center; margin-bottom: 20px;">Enter your details to initiate an instant M-Pesa STK PIN prompt on your phone.</p>
 
         <form id="depositForm" onsubmit="handleDepositSubmit(event)">
           <div class="form-group">
@@ -449,32 +429,10 @@
               <span class="input-prefix">+254</span>
               <input type="tel" id="depositPhone" placeholder="7XXXXXXXX" required>
             </div>
-            <small class="stk-desc" style="margin-top: 4px; display: block;">Enter standard Kenyan format (e.g.
-              712345678)</small>
+            <small class="stk-desc" style="margin-top: 4px; display: block;">Enter standard Kenyan format (e.g. 07XXXXXXXX or 7XXXXXXXX)</small>
           </div>
 
           <button type="submit" class="btn-primary" style="width: 100%; margin-top: 24px;">Send STK Push Prompt</button>
-          <button type="button" class="btn-modal-close" onclick="closeDepositModal()">Cancel</button>
-        </form>
-      </div>
-
-      <!-- Paystack Input View -->
-      <div id="paystackInputView" class="hidden">
-        <h3 class="modal-title">Deposit via Paystack</h3>
-        <p class="stk-desc" style="text-align: center; margin-bottom: 20px;">Deposit instantly using credit/debit card,
-          bank transfer, or mobile money.</p>
-
-        <form id="paystackDepositForm" onsubmit="handlePaystackDepositSubmit(event)">
-          <div class="form-group">
-            <label for="paystackDepositAmount" class="input-label">Amount (KES)</label>
-            <div class="input-with-prefix">
-              <span class="input-prefix">KES</span>
-              <input type="number" id="paystackDepositAmount" placeholder="Min 300" min="300" required>
-            </div>
-          </div>
-
-          <button type="submit" class="btn-primary btn-paystack-submit" style="width: 100%; margin-top: 24px;">Pay with
-            Paystack</button>
           <button type="button" class="btn-modal-close" onclick="closeDepositModal()">Cancel</button>
         </form>
       </div>
@@ -493,53 +451,6 @@
         </div>
       </div>
 
-      <!-- Paystack Loading View -->
-      <div id="paystackLoadingView" class="hidden">
-        <h3 class="modal-title">Preparing Checkout</h3>
-        <div class="modal-body">
-          <div class="stk-spinner-wrap">
-            <div class="stk-spinner" style="border-top-color: #09a5db;"></div>
-          </div>
-          <p class="stk-desc" style="text-align: center;">Preparing checkout screen. Please wait...</p>
-        </div>
-      </div>
-
-    </div>
-  </div>
-
-  <!-- SIMULATED PAYSTACK CHECKOUT OVERLAY -->
-  <div class="modal-overlay" id="simulatedPaystackModal">
-    <div class="modal-content"
-      style="max-width: 400px; background: #1a1e2d; border: 1px solid rgba(9, 165, 219, 0.4); box-shadow: 0 8px 32px rgba(0,0,0,0.55);">
-      <div style="text-align: center; margin-bottom: 20px;">
-        <span style="font-size: 24px; font-weight: 800; color: #09a5db; letter-spacing: -0.5px;">paystack</span>
-        <span
-          style="font-size: 10px; background: rgba(9, 165, 219, 0.15); color: #09a5db; padding: 2px 8px; border-radius: 12px; margin-left: 8px; font-weight: 700; border: 1px solid rgba(9, 165, 219, 0.3); vertical-align: middle;">SANDBOX</span>
-      </div>
-
-      <div class="wallet-balance-big"
-        style="background: rgba(255,255,255,0.02); border-radius: 8px; padding: 16px; text-align: center; margin-bottom: 24px; border: 1px solid rgba(255,255,255,0.05);">
-        <span style="font-size: 12px; color: var(--text-gray);">Amount to pay</span>
-        <h2 id="simPaystackAmount"
-          style="color: #fff; font-size: 28px; font-weight: 800; margin-top: 4px; margin-bottom: 4px;">KES 300.00</h2>
-        <span id="simPaystackEmail"
-          style="font-size: 11px; color: var(--text-gray); display: block;">user@helakash.com</span>
-      </div>
-
-      <div style="display: flex; flex-direction: column; gap: 12px;">
-        <button type="button" class="btn-submit-wallet" onclick="simulatePaystackPayment('success')"
-          style="background: linear-gradient(135deg, #10b981, #059669); color: #fff; padding: 14px; font-size: 14px; cursor: pointer; border: none; font-weight: 700; border-radius: 8px;">
-          ✅ Simulate Successful Payment
-        </button>
-        <button type="button" class="btn-submit-wallet" onclick="simulatePaystackPayment('failed')"
-          style="background: linear-gradient(135deg, #ef4444, #dc2626); color: #fff; padding: 14px; font-size: 14px; cursor: pointer; border: none; font-weight: 700; border-radius: 8px;">
-          ❌ Simulate Failed Payment
-        </button>
-        <button type="button" class="btn-modal-close" onclick="closeSimulatedPaystackModal()"
-          style="margin-top: 8px; padding: 12px; cursor: pointer; border-radius: 8px;">
-          Cancel & Close
-        </button>
-      </div>
     </div>
   </div>
 
@@ -824,18 +735,34 @@
               </div>
             </div>
 
-            <!-- SECTION B: PAYHERO -->
+            <!-- SECTION B: PAYMENT GATEWAY SELECTION -->
             <div style="border-bottom: 1px solid rgba(255,255,255,0.08); padding-bottom: 16px; margin-bottom: 16px;">
-              <h4 style="font-size: 13px; color: var(--primary); margin-bottom: 12px; font-weight: 700; text-transform: uppercase;">
-                PayHero M-Pesa Gateway
+              <h4 style="font-size: 13px; color: #10b981; margin-bottom: 12px; font-weight: 700; text-transform: uppercase; display: flex; align-items: center; gap: 6px;">
+                🔄 Active Payment Gateway
               </h4>
               <div class="form-group" style="margin-bottom: 10px;">
-                <label for="adminPayHeroUsernameInput" class="input-label" style="display: block; margin-bottom: 4px; font-size: 11px;">Username</label>
+                <label for="adminActiveGatewaySelect" class="input-label" style="display: block; margin-bottom: 4px; font-size: 11px;">Select Gateway in Use</label>
+                <select id="adminActiveGatewaySelect"
+                  style="background: var(--bg-input); border: 1px solid rgba(16, 185, 129, 0.4); border-radius: 6px; color: #fff; padding: 10px; font-size: 13px; width: 100%; box-sizing: border-box; font-weight: 600; cursor: pointer;">
+                  <option value="payhero">PayHero (Primary Gateway)</option>
+                  <option value="tinypesa">TinyPesa (Backup Gateway)</option>
+                </select>
+                <small style="color: #94a3b8; font-size: 11px; margin-top: 4px; display: block;">Switch between PayHero and TinyPesa anytime with 1 click.</small>
+              </div>
+            </div>
+
+            <!-- SECTION C: PAYHERO CREDENTIALS -->
+            <div style="border-bottom: 1px solid rgba(255,255,255,0.08); padding-bottom: 16px; margin-bottom: 16px;">
+              <h4 style="font-size: 13px; color: var(--primary); margin-bottom: 12px; font-weight: 700; text-transform: uppercase;">
+                PayHero Settings
+              </h4>
+              <div class="form-group" style="margin-bottom: 10px;">
+                <label for="adminPayHeroUsernameInput" class="input-label" style="display: block; margin-bottom: 4px; font-size: 11px;">PayHero Username</label>
                 <input type="text" id="adminPayHeroUsernameInput" placeholder="PayHero API Username"
                   style="background: var(--bg-input); border: 1px solid rgba(255,255,255,0.1); border-radius: 6px; color: #fff; padding: 8px; font-size: 13px; width: 100%; box-sizing: border-box;">
               </div>
               <div class="form-group" style="margin-bottom: 10px;">
-                <label for="adminPayHeroPasswordInput" class="input-label" style="display: block; margin-bottom: 4px; font-size: 11px;">Password</label>
+                <label for="adminPayHeroPasswordInput" class="input-label" style="display: block; margin-bottom: 4px; font-size: 11px;">PayHero Password</label>
                 <input type="password" id="adminPayHeroPasswordInput" placeholder="PayHero API Password"
                   style="background: var(--bg-input); border: 1px solid rgba(255,255,255,0.1); border-radius: 6px; color: #fff; padding: 8px; font-size: 13px; width: 100%; box-sizing: border-box;">
               </div>
@@ -851,21 +778,24 @@
               </div>
             </div>
 
-            <!-- SECTION C: PAYSTACK -->
+            <!-- SECTION D: TINYPESA CREDENTIALS -->
             <div style="border-bottom: 1px solid rgba(255,255,255,0.08); padding-bottom: 16px; margin-bottom: 16px;">
-              <h4 style="font-size: 13px; color: var(--primary); margin-bottom: 12px; font-weight: 700; text-transform: uppercase;">
-                Paystack Sandbox/Live Keys
+              <h4 style="font-size: 13px; color: #38bdf8; margin-bottom: 12px; font-weight: 700; text-transform: uppercase;">
+                TinyPesa Backup Settings
               </h4>
               <div class="form-group" style="margin-bottom: 10px;">
-                <label for="adminPaystackSecretInput" class="input-label" style="display: block; margin-bottom: 4px; font-size: 11px;">Secret Key</label>
-                <input type="password" id="adminPaystackSecretInput" placeholder="sk_test_..."
+                <label for="adminTinyPesaApiKeyInput" class="input-label" style="display: block; margin-bottom: 4px; font-size: 11px;">TinyPesa API Key</label>
+                <input type="password" id="adminTinyPesaApiKeyInput" placeholder="Enter TinyPesa API Key from dashboard"
                   style="background: var(--bg-input); border: 1px solid rgba(255,255,255,0.1); border-radius: 6px; color: #fff; padding: 8px; font-size: 13px; width: 100%; box-sizing: border-box;">
               </div>
               <div class="form-group" style="margin-bottom: 10px;">
-                <label for="adminPaystackPublicInput" class="input-label" style="display: block; margin-bottom: 4px; font-size: 11px;">Public Key</label>
-                <input type="text" id="adminPaystackPublicInput" placeholder="pk_test_..."
+                <label for="adminTinyPesaAccountNoInput" class="input-label" style="display: block; margin-bottom: 4px; font-size: 11px;">Account No / Identifier (Optional)</label>
+                <input type="text" id="adminTinyPesaAccountNoInput" placeholder="e.g. HELAKASH"
                   style="background: var(--bg-input); border: 1px solid rgba(255,255,255,0.1); border-radius: 6px; color: #fff; padding: 8px; font-size: 13px; width: 100%; box-sizing: border-box;">
               </div>
+              <small style="color: #94a3b8; font-size: 11px; display: block; background: rgba(56, 189, 248, 0.08); padding: 8px; border-radius: 6px; border: 1px solid rgba(56, 189, 248, 0.2);">
+                💡 Tip: Set your TinyPesa Webhook URL in your TinyPesa dashboard to <code>https://yourdomain/api/callback</code>.
+              </small>
             </div>
 
             <!-- SECTION D: SECURITY PASSCODE -->
@@ -992,8 +922,7 @@
     </div>
   </div>
 
-  <script src="https://js.paystack.co/v1/inline.js"></script>
-  <script src="app.js?v=3.0.0"></script>
+  <script src="app.js?v=3.1.0"></script>
   <script src="session-checker.js"></script>
 </body>
 

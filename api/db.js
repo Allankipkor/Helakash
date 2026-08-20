@@ -312,18 +312,28 @@ export async function initAppDatabase(req) {
       min_deposit DECIMAL(12, 2) DEFAULT 300.00,
       min_withdrawal DECIMAL(12, 2) DEFAULT 500.00,
       min_stake DECIMAL(12, 2) DEFAULT 400.00,
+      active_gateway VARCHAR(50) DEFAULT 'payhero',
       payhero_username VARCHAR(255),
       payhero_password VARCHAR(255),
       payhero_channel_id VARCHAR(255),
       payhero_callback_url VARCHAR(255),
+      tinypesa_api_key VARCHAR(255),
+      tinypesa_account_no VARCHAR(255),
       admin_passcode VARCHAR(255) DEFAULT 'Aa@123'
     );
   `);
 
+  // Ensure columns exist on already created settings tables
+  try {
+    await query(`ALTER TABLE ${tables.settings} ADD COLUMN IF NOT EXISTS active_gateway VARCHAR(50) DEFAULT 'payhero';`);
+    await query(`ALTER TABLE ${tables.settings} ADD COLUMN IF NOT EXISTS tinypesa_api_key VARCHAR(255);`);
+    await query(`ALTER TABLE ${tables.settings} ADD COLUMN IF NOT EXISTS tinypesa_account_no VARCHAR(255);`);
+  } catch (_) {}
+
   // Seed default settings row for this APP_ID
   await query(`
-    INSERT INTO ${tables.settings} (id, min_deposit, min_withdrawal, min_stake, admin_passcode)
-    VALUES ($1, 300.00, 500.00, 400.00, 'Aa@123')
+    INSERT INTO ${tables.settings} (id, min_deposit, min_withdrawal, min_stake, active_gateway, admin_passcode)
+    VALUES ($1, 300.00, 500.00, 400.00, 'payhero', 'Aa@123')
     ON CONFLICT (id) DO NOTHING;
   `, [appId]);
 

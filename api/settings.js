@@ -68,10 +68,13 @@ export default async function handler(req, res) {
           min_deposit: parseFloat(dbSettings.min_deposit || 300.00),
           min_withdrawal: parseFloat(dbSettings.min_withdrawal || 500.00),
           min_stake: parseFloat(dbSettings.min_stake || 400.00),
+          active_gateway: dbSettings.active_gateway || 'payhero',
           payhero_username: dbSettings.payhero_username || '',
           payhero_password: dbSettings.payhero_password || '',
           payhero_channel_id: dbSettings.payhero_channel_id || '',
           payhero_callback_url: dbSettings.payhero_callback_url || '',
+          tinypesa_api_key: dbSettings.tinypesa_api_key || '',
+          tinypesa_account_no: dbSettings.tinypesa_account_no || '',
           admin_passcode: dbSettings.admin_passcode,
           crash_point: parseFloat(activeRound.crash_point || 1.50),
           crash_point_2: parseFloat(activeRound.crash_point_2 || 2.20),
@@ -81,10 +84,13 @@ export default async function handler(req, res) {
             min_deposit: parseFloat(dbSettings.min_deposit || 300.00),
             min_withdrawal: parseFloat(dbSettings.min_withdrawal || 500.00),
             min_stake: parseFloat(dbSettings.min_stake || 400.00),
+            active_gateway: dbSettings.active_gateway || 'payhero',
             payhero_username: dbSettings.payhero_username || '',
             payhero_password: dbSettings.payhero_password || '',
             payhero_channel_id: dbSettings.payhero_channel_id || '',
             payhero_callback_url: dbSettings.payhero_callback_url || '',
+            tinypesa_api_key: dbSettings.tinypesa_api_key || '',
+            tinypesa_account_no: dbSettings.tinypesa_account_no || '',
             admin_passcode: dbSettings.admin_passcode
           },
           predictor: {
@@ -108,7 +114,8 @@ export default async function handler(req, res) {
         app_id: appId,
         min_deposit: parseFloat(dbSettings.min_deposit || 300.00),
         min_withdrawal: parseFloat(dbSettings.min_withdrawal || 500.00),
-        min_stake: parseFloat(dbSettings.min_stake || 400.00)
+        min_stake: parseFloat(dbSettings.min_stake || 400.00),
+        active_gateway: dbSettings.active_gateway || 'payhero'
       });
 
     } catch (err) {
@@ -124,10 +131,13 @@ export default async function handler(req, res) {
       min_deposit,
       min_withdrawal,
       min_stake,
+      active_gateway,
       payhero_username,
       payhero_password,
       payhero_channel_id,
       payhero_callback_url,
+      tinypesa_api_key,
+      tinypesa_account_no,
       new_passcode,
       crash_point,
       crash_point_2,
@@ -165,13 +175,25 @@ export default async function handler(req, res) {
       }
 
       // Perform updates if provided
-      if (min_deposit !== undefined || min_withdrawal !== undefined || min_stake !== undefined || payhero_username !== undefined || new_passcode !== undefined || payhero_callback_url !== undefined) {
+      if (
+        min_deposit !== undefined ||
+        min_withdrawal !== undefined ||
+        min_stake !== undefined ||
+        active_gateway !== undefined ||
+        payhero_username !== undefined ||
+        payhero_password !== undefined ||
+        payhero_channel_id !== undefined ||
+        payhero_callback_url !== undefined ||
+        tinypesa_api_key !== undefined ||
+        tinypesa_account_no !== undefined ||
+        new_passcode !== undefined
+      ) {
         const updatePasscode = (new_passcode || activePasscode).toString().trim();
         
         // Ensure row exists for this specific appId
         await query(`
-          INSERT INTO ${tables.settings} (id, min_deposit, min_withdrawal, min_stake, admin_passcode)
-          VALUES ($1, 300.00, 500.00, 400.00, $2)
+          INSERT INTO ${tables.settings} (id, min_deposit, min_withdrawal, min_stake, active_gateway, admin_passcode)
+          VALUES ($1, 300.00, 500.00, 400.00, 'payhero', $2)
           ON CONFLICT (id) DO NOTHING;
         `, [appId, updatePasscode]);
 
@@ -180,20 +202,26 @@ export default async function handler(req, res) {
           SET min_deposit = COALESCE($1, min_deposit),
               min_withdrawal = COALESCE($2, min_withdrawal),
               min_stake = COALESCE($3, min_stake),
-              payhero_username = COALESCE($4, payhero_username),
-              payhero_password = COALESCE($5, payhero_password),
-              payhero_channel_id = COALESCE($6, payhero_channel_id),
-              payhero_callback_url = COALESCE($7, payhero_callback_url),
-              admin_passcode = $8
-          WHERE id = $9;
+              active_gateway = COALESCE($4, active_gateway),
+              payhero_username = COALESCE($5, payhero_username),
+              payhero_password = COALESCE($6, payhero_password),
+              payhero_channel_id = COALESCE($7, payhero_channel_id),
+              payhero_callback_url = COALESCE($8, payhero_callback_url),
+              tinypesa_api_key = COALESCE($9, tinypesa_api_key),
+              tinypesa_account_no = COALESCE($10, tinypesa_account_no),
+              admin_passcode = $11
+          WHERE id = $12;
         `, [
           min_deposit !== undefined ? parseFloat(min_deposit) : null,
           min_withdrawal !== undefined ? parseFloat(min_withdrawal) : null,
           min_stake !== undefined ? parseFloat(min_stake) : null,
+          active_gateway !== undefined ? active_gateway.toLowerCase().trim() : null,
           payhero_username !== undefined ? payhero_username : null,
           payhero_password !== undefined ? payhero_password : null,
           payhero_channel_id !== undefined ? payhero_channel_id : null,
           payhero_callback_url !== undefined ? payhero_callback_url : null,
+          tinypesa_api_key !== undefined ? tinypesa_api_key : null,
+          tinypesa_account_no !== undefined ? tinypesa_account_no : null,
           updatePasscode,
           appId
         ]);

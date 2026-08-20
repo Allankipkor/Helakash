@@ -35,13 +35,13 @@ async function createTable() {
         id VARCHAR(30) PRIMARY KEY,
         min_deposit DECIMAL(12, 2) DEFAULT 300.00,
         min_withdrawal DECIMAL(12, 2) DEFAULT 500.00,
-        min_stake DECIMAL(12, 2) DEFAULT 400.00,
+        active_gateway VARCHAR(50) DEFAULT 'payhero',
         payhero_username VARCHAR(255),
         payhero_password VARCHAR(255),
         payhero_channel_id VARCHAR(255),
         payhero_callback_url VARCHAR(255),
-        paystack_secret_key VARCHAR(255),
-        paystack_public_key VARCHAR(255),
+        tinypesa_api_key VARCHAR(255),
+        tinypesa_account_no VARCHAR(255),
         admin_passcode VARCHAR(255) DEFAULT 'Aa@123'
       );
     `;

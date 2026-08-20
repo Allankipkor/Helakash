@@ -15,10 +15,13 @@ export default async function handler(req, res) {
   }
 
   let minDeposit = 300.00;
+  let activeGateway = 'payhero';
   let username = null;
   let password = null;
   let channelId = null;
   let callbackUrl = null;
+  let tinypesaApiKey = null;
+  let tinypesaAccountNo = null;
 
   try {
     let settingsQuery = await query(`SELECT * FROM ${tables.settings} WHERE id = $1;`, [appId]);
@@ -28,10 +31,13 @@ export default async function handler(req, res) {
     if (settingsQuery.rows.length > 0) {
       const dbSettings = settingsQuery.rows[0];
       minDeposit = parseFloat(dbSettings.min_deposit || 300.00);
+      activeGateway = (dbSettings.active_gateway || 'payhero').toLowerCase().trim();
       username = dbSettings.payhero_username || null;
       password = dbSettings.payhero_password || null;
       channelId = dbSettings.payhero_channel_id || null;
       callbackUrl = dbSettings.payhero_callback_url || null;
+      tinypesaApiKey = dbSettings.tinypesa_api_key || null;
+      tinypesaAccountNo = dbSettings.tinypesa_account_no || null;
     }
   } catch (dbErr) {
     console.error("Failed to fetch settings from DB in deposit.js:", dbErr.message);
@@ -43,7 +49,7 @@ export default async function handler(req, res) {
   }
 
   // Payment phone number (receives the STK push prompt)
-  const { phone254: payPhone254, primary: payPhonePrimary } = normalizePhoneVariants(phone);
+  const { phone254: payPhone254, phone0: payPhone0, primary: payPhonePrimary } = normalizePhoneVariants(phone);
   if (!/^254[71]\d{8}$/.test(payPhone254)) {
     return res.status(400).json({ error: 'Invalid Kenyan phone number format. Please use 07XXXXXXXX or 7XXXXXXXX.' });
   }
@@ -66,9 +72,12 @@ export default async function handler(req, res) {
   };
 
   // Fallback to env vars if database settings are not set
+  if (!activeGateway) activeGateway = (cleanEnvVar(process.env.ACTIVE_GATEWAY) || 'payhero').toLowerCase();
   if (!username) username = cleanEnvVar(process.env.PAYHERO_USERNAME);
   if (!password) password = cleanEnvVar(process.env.PAYHERO_PASSWORD);
   if (!channelId) channelId = cleanEnvVar(process.env.PAYHERO_CHANNEL_ID);
+  if (!tinypesaApiKey) tinypesaApiKey = cleanEnvVar(process.env.TINYPESA_API_KEY);
+  if (!tinypesaAccountNo) tinypesaAccountNo = cleanEnvVar(process.env.TINYPESA_ACCOUNT_NO);
   if (!callbackUrl) {
     callbackUrl = cleanEnvVar(process.env.PAYHERO_CALLBACK_URL);
     if (!callbackUrl && req.headers && req.headers.host) {
@@ -84,9 +93,13 @@ export default async function handler(req, res) {
   }
   const userPhone = user.phone || accountPrimary;
 
+  // Determine if missing credentials for the active gateway
+  const isTinyPesa = activeGateway === 'tinypesa';
+  const missingCredentials = isTinyPesa ? !tinypesaApiKey : (!username || !password || !channelId);
+
   // Fallback to SIMULATED mode if explicitly requested or if credentials are missing
-  if (req.body.simulated || !username || !password || !channelId) {
-    console.log("Running deposit in SIMULATED mode.");
+  if (req.body.simulated || missingCredentials) {
+    console.log(`Running deposit in SIMULATED mode (Gateway: ${activeGateway}).`);
 
     const reference = `SIM-${appId.toUpperCase()}-${Date.now()}`;
 
@@ -111,6 +124,7 @@ export default async function handler(req, res) {
         success: true,
         message: "STK push initiated successfully (SIMULATED)",
         reference: reference,
+        gateway: activeGateway,
         simulated: true,
         newBalance: newBal,
         balance: newBal
@@ -121,9 +135,80 @@ export default async function handler(req, res) {
     }
   }
 
-  // LIVE MODE
+  // =========================================================================
+  // LIVE MODE: ROUTE TO ACTIVE GATEWAY (TINYPESA OR PAYHERO)
+  // =========================================================================
+  const reference = `${appId.toUpperCase()}-${Date.now()}`;
+
+  // Log pending transaction in DB
+  await query(`
+    INSERT INTO ${tables.transactions} (phone, type, amount, status, reference)
+    VALUES ($1, 'Deposit', $2, 'PENDING', $3);
+  `, [userPhone, depositAmount, reference]);
+
+  // -------------------------------------------------------------------------
+  // OPTION A: TINYPESA GATEWAY
+  // -------------------------------------------------------------------------
+  if (isTinyPesa) {
+    try {
+      const formData = new URLSearchParams();
+      formData.append('amount', Math.round(depositAmount).toString());
+      formData.append('msisdn', payPhone0 || payPhone254);
+      formData.append('account_no', tinypesaAccountNo || reference);
+
+      console.log(`[TinyPesa] Initiating STK push for ${payPhone0} amount ${depositAmount} (Ref: ${reference})`);
+
+      const response = await fetch('https://tinypesa.com/api/v1/express/initialize', {
+        method: 'POST',
+        headers: {
+          'ApiKey': tinypesaApiKey,
+          'Content-Type': 'application/x-www-form-urlencoded'
+        },
+        body: formData.toString()
+      });
+
+      let data;
+      try {
+        data = await response.json();
+      } catch (e) {
+        data = null;
+      }
+
+      if (!response.ok || (data && data.success === false)) {
+        await query(`
+          UPDATE ${tables.transactions}
+          SET status = 'FAILED'
+          WHERE reference = $1;
+        `, [reference]);
+
+        console.error("TinyPesa STK push failed. Status:", response.status, "Data:", data);
+        const errMsg = (data && (data.message || data.error || data.description)) || `TinyPesa API Error (${response.status})`;
+        return res.status(response.status || 400).json({ error: errMsg });
+      }
+
+      return res.status(200).json({
+        success: true,
+        message: (data && data.message) || 'STK Push initiated successfully via TinyPesa',
+        reference: reference,
+        gateway: 'tinypesa',
+        response: data
+      });
+
+    } catch (error) {
+      await query(`
+        UPDATE ${tables.transactions}
+        SET status = 'FAILED'
+        WHERE reference = $1;
+      `, [reference]);
+      console.error("TinyPesa request exception:", error);
+      return res.status(500).json({ error: `TinyPesa connection error: ${error.message}` });
+    }
+  }
+
+  // -------------------------------------------------------------------------
+  // OPTION B: PAYHERO GATEWAY
+  // -------------------------------------------------------------------------
   try {
-    const reference = `${appId.toUpperCase()}-${Date.now()}`;
     const payload = {
       amount: parseInt(depositAmount),
       phone_number: payPhone254,
@@ -135,12 +220,6 @@ export default async function handler(req, res) {
     if (callbackUrl) {
       payload.callback_url = callbackUrl;
     }
-
-    // Log pending transaction in DB
-    await query(`
-      INSERT INTO ${tables.transactions} (phone, type, amount, status, reference)
-      VALUES ($1, 'Deposit', $2, 'PENDING', $3);
-    `, [userPhone, depositAmount, reference]);
 
     const auth = Buffer.from(`${username}:${password}`).toString('base64');
 
@@ -189,7 +268,7 @@ export default async function handler(req, res) {
       }
 
       if (errorMessage.includes("merchant has insufficient balance")) {
-        errorMessage = "The merchant's payment service wallet has insufficient float balance. Please contact the site administrator to top up the Pay Hero wallet.";
+        errorMessage = "The merchant's payment service wallet has insufficient float balance. Please contact the site administrator to top up or switch to the backup gateway.";
       }
 
       return res.status(response.status).json({ error: errorMessage });
@@ -199,6 +278,7 @@ export default async function handler(req, res) {
       success: true,
       message: data.message || 'STK Push initiated successfully',
       reference: reference,
+      gateway: 'payhero',
       response: data
     });
   } catch (error) {

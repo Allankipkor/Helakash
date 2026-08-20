@@ -8,29 +8,31 @@ export default async function handler(req, res) {
 
   try {
     const callbackData = req.body || {};
-    console.log("=== PAY HERO WEBHOOK CALLBACK RECEIVED ===");
+    console.log("=== PAYMENT GATEWAY WEBHOOK CALLBACK RECEIVED ===");
     console.log(JSON.stringify(callbackData, null, 2));
-    console.log("=========================================");
+    console.log("================================================");
 
-    // Extract fields across possible Pay Hero / Daraja webhook payload variations
-    const data = callbackData.response || callbackData.Body?.stkCallback || callbackData;
+    // Extract fields across possible PayHero / TinyPesa / Daraja webhook payload variations
+    const data = callbackData.response || callbackData.Body?.stkCallback || callbackData.stkCallback || callbackData.data || callbackData;
     
     // Status resolution
     let rawStatus = data.Status || data.status || data.ResultDesc || (data.ResultCode === 0 ? 'SUCCESS' : (data.ResultCode ? 'FAILED' : ''));
     if (!rawStatus && callbackData.status) rawStatus = callbackData.status;
     const statusUpper = String(rawStatus).toUpperCase();
-    const isSuccess = statusUpper.includes('SUCCESS') || data.ResultCode === 0 || callbackData.success === true;
+    const isSuccess = statusUpper.includes('SUCCESS') || data.ResultCode === 0 || callbackData.success === true || callbackData.status === 'success';
 
-    // Reference resolution
-    let externalReference = data.ExternalReference || data.external_reference || data.MerchantRequestID || data.CheckoutRequestID || callbackData.external_reference;
-    let mpesaReceipt = data.Reference || data.reference || data.MpesaReceiptNumber || null;
-    let amount = parseFloat(data.Amount || data.amount || 0);
+    // Reference & identifier resolution
+    let externalReference = data.ExternalReference || data.external_reference || data.account_no || data.AccountReference || data.MerchantRequestID || data.CheckoutRequestID || callbackData.external_reference || callbackData.account_no;
+    let mpesaReceipt = data.Reference || data.reference || data.mpesa_reference || data.MpesaReceiptNumber || null;
+    let amount = parseFloat(data.Amount || data.amount || callbackData.amount || 0);
+    let callbackPhone = data.PhoneNumber || data.msisdn || data.phone || callbackData.msisdn || callbackData.phone || null;
 
     // Extract from CallbackMetadata if Daraja item array format
     if (data.CallbackMetadata && Array.isArray(data.CallbackMetadata.Item)) {
       for (const item of data.CallbackMetadata.Item) {
         if (item.Name === 'Amount' && !amount) amount = parseFloat(item.Value);
         if (item.Name === 'MpesaReceiptNumber' && !mpesaReceipt) mpesaReceipt = String(item.Value);
+        if (item.Name === 'PhoneNumber' && !callbackPhone) callbackPhone = String(item.Value);
       }
     }
 
@@ -63,11 +65,6 @@ export default async function handler(req, res) {
       console.warn("Webhook logging notice:", logErr.message);
     }
 
-    if (!externalReference && !mpesaReceipt) {
-      console.warn("Missing external reference in callback payload.");
-      return res.status(200).json({ success: false, message: "No reference found in callback." });
-    }
-
     // 1. Fetch transaction matching external reference (or mpesaReceipt fallback)
     let txQuery = { rows: [] };
     if (externalReference) {
@@ -83,9 +80,23 @@ export default async function handler(req, res) {
       `, [mpesaReceipt]);
     }
 
+    // Fallback: match by phone + latest PENDING deposit if reference was rewritten by gateway
+    if (txQuery.rows.length === 0 && callbackPhone) {
+      const { phone254, phone0, phoneShort } = normalizePhoneVariants(callbackPhone);
+      txQuery = await query(`
+        SELECT id, phone, amount, status, reference FROM ${tables.transactions}
+        WHERE (phone = $1 OR phone = $2 OR phone = $3)
+          AND status = 'PENDING'
+          AND type ILIKE '%deposit%'
+          AND created_at >= NOW() - INTERVAL '30 minutes'
+        ORDER BY created_at DESC
+        LIMIT 1;
+      `, [phone254, phone0, phoneShort]);
+    }
+
     if (txQuery.rows.length === 0) {
-      console.warn(`Transaction reference '${externalReference}' not found in ${tables.transactions}`);
-      return res.status(200).json({ success: false, message: `Transaction '${externalReference}' not found.` });
+      console.warn(`Transaction reference '${externalReference}' (phone: ${callbackPhone}) not found in ${tables.transactions}`);
+      return res.status(200).json({ success: false, message: `Transaction '${externalReference || callbackPhone}' not found.` });
     }
 
     const tx = txQuery.rows[0];
@@ -100,7 +111,7 @@ export default async function handler(req, res) {
     if (tx.status === 'PENDING') {
       const finalStatus = isSuccess ? 'Success' : 'Failed';
 
-      // Update transaction status (keep reference stable so polling finds it)
+      // Update transaction status
       await query(`
         UPDATE ${tables.transactions} 
         SET status = $1
