@@ -109,7 +109,14 @@ export default async function handler(req, res) {
   }
   const userPhone = user.phone || accountPrimary;
 
-  // Determine if missing credentials for the active gateway
+  // Fallback to environment variables if still missing
+  if (!tinypesaApiKey) {
+    tinypesaApiKey = process.env.TINYPESA_LINK_API_KEY || process.env.TINYPESA_API_KEY || null;
+  }
+  if (!tinypesaAccountNo) {
+    tinypesaAccountNo = process.env.TINYPESA_USERNAME || process.env.TINYPESA_ACCOUNT_NO || 'deposit';
+  }
+
   const isTinyPesa = activeGateway === 'tinypesa';
   const missingCredentials = isTinyPesa ? !tinypesaApiKey : (!username || !password || !channelId);
 
@@ -163,26 +170,39 @@ export default async function handler(req, res) {
   `, [userPhone, depositAmount, reference]);
 
   // -------------------------------------------------------------------------
-  // OPTION A: TINYPESA GATEWAY
+  // OPTION A: TINYPESA GATEWAY (OFFICIAL V1 SPECIFICATION)
   // -------------------------------------------------------------------------
   if (isTinyPesa) {
     try {
-      const formData = new URLSearchParams();
-      formData.append('amount', Math.round(depositAmount).toString());
-      formData.append('msisdn', payPhone0 || payPhone254);
-      formData.append('account_no', tinypesaAccountNo || reference);
-
-      console.log(`[TinyPesa] Initiating STK push for ${payPhone0} amount ${depositAmount} (Ref: ${reference})`);
-
       const cleanKey = (tinypesaApiKey || '').trim();
-      const response = await fetch('https://api.tinypesa.com/api/v1/express/initialize/', {
+      let linkUsername = (tinypesaAccountNo || 'deposit').trim();
+      // Extract clean link username if user pasted full URL (e.g. https://tinypesa.com/deposit -> deposit)
+      if (linkUsername.includes('/')) {
+        linkUsername = linkUsername.split('/').filter(Boolean).pop();
+      }
+      if (linkUsername.includes('?')) {
+        linkUsername = linkUsername.split('?')[0];
+      }
+
+      const postUrl = `https://api.tinypesa.com/api/v1/express/initialize/?username=${encodeURIComponent(linkUsername)}`;
+      
+      const payload = {
+        amount: Math.round(depositAmount),
+        msisdn: payPhone254,
+        account_no: reference,
+        callback_url: callbackUrl || `https://${req.headers.host || 'pesakash.com'}/api/callback`
+      };
+
+      console.log(`[TinyPesa] Initiating STK push for ${payload.msisdn} amount ${depositAmount} to link "${linkUsername}" (Ref: ${reference})`);
+
+      const response = await fetch(postUrl, {
         method: 'POST',
         headers: {
-          'ApiKey': cleanKey,
-          'Content-Type': 'application/x-www-form-urlencoded',
-          'Accept': 'application/json'
+          'Accept': 'application/json',
+          'Content-Type': 'application/json',
+          'Apikey': cleanKey
         },
-        body: formData.toString()
+        body: JSON.stringify(payload)
       });
 
       let data;
@@ -209,17 +229,16 @@ export default async function handler(req, res) {
         message: (data && data.message) || 'STK Push initiated successfully via TinyPesa',
         reference: reference,
         gateway: 'tinypesa',
-        response: data
+        requestId: data && (data.request_id || data.TinyPesaID || data.id)
       });
-
-    } catch (error) {
+    } catch (err) {
       await query(`
         UPDATE ${tables.transactions}
         SET status = 'FAILED'
         WHERE reference = $1;
       `, [reference]);
-      console.error("TinyPesa request exception:", error);
-      return res.status(500).json({ error: `TinyPesa connection error: ${error.message}` });
+      console.error("TinyPesa request exception:", err);
+      return res.status(500).json({ error: `TinyPesa connection error: ${err.message}` });
     }
   }
 
