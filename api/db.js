@@ -1,16 +1,12 @@
 import { neon } from '@neondatabase/serverless';
 
-let _sql = null;
+const databaseUrl = process.env.POSTGRES_URL || process.env.DATABASE_URL;
 
-export function getSql() {
-  const databaseUrl = process.env.POSTGRES_URL || process.env.DATABASE_URL;
-  if (!_sql && databaseUrl) {
-    _sql = neon(databaseUrl);
-  }
-  return _sql;
+if (!databaseUrl) {
+  console.warn("⚠️ Neon Database connection string not found in POSTGRES_URL or DATABASE_URL environment variables.");
 }
 
-export const sql = getSql();
+export const sql = databaseUrl ? neon(databaseUrl) : null;
 
 /**
  * Dynamically determines the active application ID.
@@ -74,11 +70,10 @@ export const TABLES = getTables();
  * @returns {Promise<{ rows: Array<any> }>}
  */
 export async function query(text, params = []) {
-  const client = getSql();
-  if (!client) {
+  if (!sql) {
     throw new Error('Database connection string is missing. Please configure POSTGRES_URL or DATABASE_URL in environment variables.');
   }
-  const result = await client.query(text, params);
+  const result = await sql.query(text, params);
   
   if (Array.isArray(result)) {
     return { rows: result };
@@ -94,8 +89,7 @@ export async function query(text, params = []) {
  * @param {object} [req]
  */
 export async function initAppDatabase(req) {
-  const client = getSql();
-  if (!client) {
+  if (!sql) {
     throw new Error('Database connection string is missing.');
   }
 

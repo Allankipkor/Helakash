@@ -1,5 +1,4 @@
-import { query, getTables, initAppDatabase } from './db.js';
-import crypto from 'crypto';
+import { query, getTables } from './db.js';
 
 export default async function handler(req, res) {
   const tables = getTables(req);
@@ -8,12 +7,12 @@ export default async function handler(req, res) {
     return res.status(405).json({ error: 'Method Not Allowed' });
   }
 
-  const { phone, password } = req.body || {};
+  const { phone, password } = req.body;
   if (!phone || !password) {
     return res.status(400).json({ error: 'Phone number and password are required.' });
   }
 
-  let cleanPhone = String(phone).replace(/\D/g, '');
+  let cleanPhone = phone.replace(/\D/g, '');
   if (cleanPhone.startsWith('0')) {
     cleanPhone = '254' + cleanPhone.substring(1);
   } else if (cleanPhone.startsWith('7') || cleanPhone.startsWith('1')) {
@@ -27,14 +26,6 @@ export default async function handler(req, res) {
   if (password.length < 4) {
     return res.status(400).json({ error: 'Password must be at least 4 characters.' });
   }
-
-  try {
-    await initAppDatabase(req);
-  } catch (initErr) {
-    console.warn("initAppDatabase non-fatal notice in signup.js:", initErr.message);
-  }
-
-  const passwordHash = crypto.createHash('sha256').update(password).digest('hex');
 
   try {
     // 1. Check if user already exists
@@ -51,7 +42,7 @@ export default async function handler(req, res) {
     await query(`
       INSERT INTO ${tables.users} (phone, password_hash, balance) 
       VALUES ($1, $2, 0.00);
-    `, [cleanPhone, passwordHash]);
+    `, [cleanPhone, password]);
 
     return res.status(200).json({
       success: true,
