@@ -83,19 +83,24 @@ function syncWithDatabase() {
   const phone = localStorage.getItem("helakash_user");
   if (!phone) return;
 
-  fetch(`/api/user-details?phone=${phone}`)
+  fetch(`/api/user-details?phone=${encodeURIComponent(phone)}`)
     .then(res => res.json())
     .then(data => {
       if (data.success) {
-        userBalance = data.balance;
-        transactions = data.transactions;
-        saveBalance();
-        saveTransactions();
-        updateBalanceUI();
-        renderTransactionHistory();
+        const bal = typeof data.balance === 'number' ? data.balance : (data.user && typeof data.user.balance === 'number' ? data.user.balance : null);
+        if (bal !== null && !isNaN(bal)) {
+          userBalance = bal;
+          saveBalance();
+          updateBalanceUI();
+        }
+        if (data.transactions && Array.isArray(data.transactions)) {
+          transactions = data.transactions;
+          saveTransactions();
+          renderTransactionHistory();
+        }
       }
     })
-    .catch(err => console.error("Database initialization fetch failed:", err));
+    .catch(err => console.error("Database sync failed:", err));
 }
 
 function updateBalanceUI() {
@@ -1306,39 +1311,64 @@ function handleDepositSubmit(event) {
 
 function pollDepositStatus(phone, reference, amount) {
   let attempts = 0;
+  const targetPhone = localStorage.getItem("helakash_user") || phone;
+  const initialBalance = userBalance;
+  
   const pollInterval = setInterval(() => {
     attempts++;
     
-    // Stop polling after 40 seconds (approx 13 attempts)
-    if (attempts > 13) {
+    // Stop polling after 60 seconds (24 attempts)
+    if (attempts > 24) {
       clearInterval(pollInterval);
-      alert("⚠️ STK push response timed out. If you made a payment, your balance will update automatically shortly.");
+      syncWithDatabase();
+      alert("⚠️ STK push timeout. If you approved the payment on your phone, your wallet balance will reflect automatically shortly.");
       closeDepositModal();
       return;
     }
     
-    fetch(`/api/user-details?phone=${phone}`)
+    fetch(`/api/user-details?phone=${encodeURIComponent(targetPhone)}`)
       .then(res => res.json())
       .then(data => {
         if (data.success) {
-          // Check if balance has updated on server
-          if (data.balance > userBalance) {
+          const bal = typeof data.balance === 'number' ? data.balance : (data.user && typeof data.user.balance === 'number' ? data.user.balance : null);
+          
+          // Check if balance increased or if a new Success deposit transaction exists
+          const txFound = data.transactions && data.transactions.some(t => 
+            (t.reference === reference || (t.type && t.type.toLowerCase().includes('deposit'))) && 
+            t.status && t.status.toLowerCase() === 'success'
+          );
+          
+          if ((bal !== null && bal > initialBalance) || txFound) {
             clearInterval(pollInterval);
-            userBalance = data.balance;
-            transactions = data.transactions;
+            clearInterval(stkTimerInterval);
+            if (bal !== null && !isNaN(bal)) userBalance = bal;
+            if (data.transactions) transactions = data.transactions;
             saveBalance();
             saveTransactions();
             updateBalanceUI();
             renderTransactionHistory();
-            clearInterval(stkTimerInterval);
-            alert(`✅ DEPOSIT RECEIVED! KES ${amount} has been successfully added to your HelaKash wallet.`);
+            showToast(`✅ Deposit Received! KES ${amount} added to your wallet.`, 'success', 5000);
+            alert(`✅ DEPOSIT RECEIVED! KES ${amount} has been successfully added to your wallet.`);
             closeDepositModal();
           }
         }
       })
       .catch(err => console.error("Deposit poll error:", err));
-  }, 3000);
+  }, 2500);
 }
+
+// Automatic background balance sync every 6 seconds and on window focus
+setInterval(() => {
+  if (localStorage.getItem("helakash_user")) {
+    syncWithDatabase();
+  }
+}, 6000);
+
+window.addEventListener("focus", () => {
+  if (localStorage.getItem("helakash_user")) {
+    syncWithDatabase();
+  }
+});
 
 function startSTKCountdown(seconds, amount) {
   const timerVal = document.getElementById("timerVal");
