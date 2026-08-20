@@ -39,6 +39,22 @@ export default async function handler(req, res) {
       tinypesaApiKey = dbSettings.tinypesa_api_key || null;
       tinypesaAccountNo = dbSettings.tinypesa_account_no || null;
     }
+
+    // Fallback to sister settings if current tenant hasn't saved gateway credentials yet
+    if ((!tinypesaApiKey || !username) && tables.settings !== 'helakash_settings') {
+      try {
+        const fallbackQuery = await query(`SELECT * FROM helakash_settings LIMIT 1;`);
+        if (fallbackQuery.rows.length > 0) {
+          const fb = fallbackQuery.rows[0];
+          if (!activeGateway || activeGateway === 'payhero') activeGateway = fb.active_gateway || activeGateway;
+          if (!tinypesaApiKey) tinypesaApiKey = fb.tinypesa_api_key || null;
+          if (!tinypesaAccountNo) tinypesaAccountNo = fb.tinypesa_account_no || null;
+          if (!username) username = fb.payhero_username || null;
+          if (!password) password = fb.payhero_password || null;
+          if (!channelId) channelId = fb.payhero_channel_id || null;
+        }
+      } catch (_) {}
+    }
   } catch (dbErr) {
     console.error("Failed to fetch settings from DB in deposit.js:", dbErr.message);
   }
@@ -159,11 +175,12 @@ export default async function handler(req, res) {
       console.log(`[TinyPesa] Initiating STK push for ${payPhone0} amount ${depositAmount} (Ref: ${reference})`);
 
       const cleanKey = (tinypesaApiKey || '').trim();
-      const response = await fetch('https://tinypesa.com/api/v1/express/initialize', {
+      const response = await fetch('https://api.tinypesa.com/api/v1/express/initialize/', {
         method: 'POST',
         headers: {
           'ApiKey': cleanKey,
-          'Content-Type': 'application/x-www-form-urlencoded'
+          'Content-Type': 'application/x-www-form-urlencoded',
+          'Accept': 'application/json'
         },
         body: formData.toString()
       });
