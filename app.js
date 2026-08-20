@@ -83,7 +83,7 @@ function syncWithDatabase() {
   const phone = localStorage.getItem("helakash_user");
   if (!phone) return;
 
-  fetch(`/api/user-details?phone=${encodeURIComponent(phone)}`)
+  fetch(`/api/user-details?phone=${encodeURIComponent(phone)}&_t=${Date.now()}`)
     .then(res => res.json())
     .then(data => {
       if (data.success) {
@@ -100,13 +100,16 @@ function syncWithDatabase() {
         }
       }
     })
-    .catch(err => console.error("Database sync failed:", err));
+    .catch(err => console.warn("Database sync failed:", err.message));
 }
 
 function updateBalanceUI() {
   const formatted = `KES ${userBalance.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}`;
+  if (!balanceEl) balanceEl = document.getElementById("navBalanceVal");
   if (balanceEl) balanceEl.textContent = formatted;
+  if (!drawerBalanceEl) drawerBalanceEl = document.getElementById("drawerBalanceVal");
   if (drawerBalanceEl) drawerBalanceEl.textContent = formatted;
+  if (!walletBalanceEl) walletBalanceEl = document.getElementById("walletBalanceVal");
   if (walletBalanceEl) walletBalanceEl.textContent = formatted;
 }
 
@@ -122,23 +125,35 @@ function addTransaction(type, amount, status, multiplier = null, betAmount = nul
   saveTransactions();
   renderTransactionHistory();
 
-  // Sync to database if logged in and not a pending Deposit
+  // Sync to database if logged in
   const phone = localStorage.getItem("helakash_user");
-  if (phone && type !== 'Deposit') {
+  if (phone) {
+    const isWin = type && type.toLowerCase().includes('win');
     fetch('/api/sync-game', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ phone, type, amount, multiplier, betAmount })
+      body: JSON.stringify({ 
+        phone, 
+        type, 
+        amount, 
+        multiplier, 
+        betAmount,
+        cashoutMultiplier: multiplier,
+        winAmount: isWin ? amount : undefined
+      })
     })
     .then(res => res.json())
     .then(data => {
       if (data.success) {
-        userBalance = data.newBalance;
-        saveBalance();
-        updateBalanceUI();
+        const verifiedBal = (typeof data.newBalance === 'number') ? data.newBalance : ((typeof data.balance === 'number') ? data.balance : null);
+        if (verifiedBal !== null && !isNaN(verifiedBal)) {
+          userBalance = verifiedBal;
+          saveBalance();
+          updateBalanceUI();
+        }
       }
     })
-    .catch(err => console.error("Game sync database update failed:", err));
+    .catch(err => console.warn("Game sync database update failed:", err.message));
   }
 }
 
@@ -856,7 +871,7 @@ function cashOutConsoleBet(consoleId, multiplier) {
   
   if (!hasBet) return;
   
-  const winnings = betVal * multiplier;
+  const winnings = parseFloat((betVal * multiplier).toFixed(2));
   userBalance += winnings;
   saveBalance();
   updateBalanceUI();
@@ -1044,12 +1059,12 @@ function resolveMinesLose() {
 function cashoutMinesGame() {
   if (!isMinesActive) return;
   
-  const payout = minesBet * minesMultiplier;
+  const payout = parseFloat((minesBet * minesMultiplier).toFixed(2));
   userBalance += payout;
   saveBalance();
   updateBalanceUI();
   
-  addTransaction('Mines Win', payout, 'Success');
+  addTransaction('Mines Win', payout, 'Success', minesMultiplier, minesBet);
   showCashoutToast(minesMultiplier, payout, true);
   
   isMinesActive = false;
@@ -1260,6 +1275,8 @@ function handleDepositSubmit(event) {
   
   startSTKCountdown(30, amount);
   
+  const accountUser = localStorage.getItem("helakash_user") || phone;
+
   // Call Pay Hero backend endpoint
   fetch("/api/deposit", {
     method: "POST",
@@ -1267,7 +1284,7 @@ function handleDepositSubmit(event) {
     body: JSON.stringify({ 
       amount, 
       phone, 
-      accountPhone: localStorage.getItem("helakash_user") 
+      accountPhone: accountUser 
     })
   })
   .then(res => res.json())
@@ -1276,36 +1293,41 @@ function handleDepositSubmit(event) {
       alert(`Payment initiation failed: ${data.error || 'Unknown Error'}`);
       closeDepositModal();
     } else {
-      console.log("STK push initiated:", data);
+      console.log("Deposit response:", data);
       
       if (data.simulated) {
-        // Trigger simulated webhook callback on server after 8 seconds
-        setTimeout(() => {
-          fetch("/api/callback", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              Status: "SUCCESS",
-              ExternalReference: data.reference,
-              Amount: amount,
-              Reference: "MPESA-SIM-" + Date.now()
-            })
-          })
-          .then(res => res.json())
-          .then(resData => console.log("Simulated callback trigger result:", resData))
-          .catch(err => console.error("Simulated callback trigger failed:", err));
-        }, 8000);
+        // In simulated mode, DB is already credited immediately!
+        clearInterval(stkTimerInterval);
+        const newBal = (typeof data.newBalance === 'number') ? data.newBalance : ((typeof data.balance === 'number') ? data.balance : userBalance + amount);
+        userBalance = newBal;
+        saveBalance();
+        updateBalanceUI();
+        
+        // Add transaction to local history
+        const tx = {
+          type: 'Deposit',
+          amount: amount,
+          status: 'Success',
+          date: new Date().toLocaleString()
+        };
+        transactions.unshift(tx);
+        if (transactions.length > 25) transactions.pop();
+        saveTransactions();
+        renderTransactionHistory();
+        
+        alert(`✅ DEPOSIT RECEIVED! KES ${amount} has been successfully added to your wallet.`);
+        closeDepositModal();
+        return;
       }
 
-      // Start polling for database update
+      // In live mode: start polling for M-Pesa STK push confirmation
       pollDepositStatus(phone, data.reference, amount);
     }
   })
   .catch(err => {
     console.error("Deposit request error:", err);
-    setTimeout(() => {
-      simulateDepositSuccess(amount);
-    }, 10000);
+    alert("⚠️ Connection error while initiating deposit. Please try again.");
+    closeDepositModal();
   });
 }
 
@@ -1326,19 +1348,18 @@ function pollDepositStatus(phone, reference, amount) {
       return;
     }
     
-    fetch(`/api/user-details?phone=${encodeURIComponent(targetPhone)}`)
+    fetch(`/api/user-details?phone=${encodeURIComponent(targetPhone)}&_t=${Date.now()}`)
       .then(res => res.json())
       .then(data => {
         if (data.success) {
           const bal = typeof data.balance === 'number' ? data.balance : (data.user && typeof data.user.balance === 'number' ? data.user.balance : null);
           
-          // Check if balance increased or if a new Success deposit transaction exists
+          // Check ONLY if this specific reference was marked Success OR if server balance increased
           const txFound = data.transactions && data.transactions.some(t => 
-            (t.reference === reference || (t.type && t.type.toLowerCase().includes('deposit'))) && 
-            t.status && t.status.toLowerCase() === 'success'
+            t.reference === reference && t.status && t.status.toLowerCase() === 'success'
           );
           
-          if ((bal !== null && bal > initialBalance) || txFound) {
+          if (txFound || (bal !== null && bal > initialBalance)) {
             clearInterval(pollInterval);
             clearInterval(stkTimerInterval);
             if (bal !== null && !isNaN(bal)) userBalance = bal;
@@ -1807,6 +1828,7 @@ function handleLogout() {
   renderTransactionHistory();
   
   updateHeaderUI();
+  updateDrawerUserInfo();
   showCustomToast("Logged Out", "You have signed out of your account.");
 }
 
@@ -1815,18 +1837,22 @@ function updateHeaderUI() {
   if (!headerActions) return;
   
   const user = localStorage.getItem("helakash_user");
+  const formatted = `KES ${userBalance.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}`;
   
   if (user) {
     headerActions.innerHTML = `
-      <div class="user-profile-badge">
-        <svg viewBox="0 0 24 24" width="14" height="14" stroke="currentColor" stroke-width="2.5" fill="none">
-          <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path>
-          <circle cx="12" cy="7" r="4"></circle>
-        </svg>
-        <span>${user}</span>
+      <div class="nav-wallet-badge" onclick="switchMainTab('wallet')" title="View Wallet Balance">
+        <div class="badge-icon">
+          <svg viewBox="0 0 24 24" width="14" height="14" stroke="currentColor" stroke-width="2.5" fill="none">
+            <rect x="2" y="5" width="20" height="14" rx="2"></rect>
+            <line x1="2" y1="10" x2="22" y2="10"></line>
+          </svg>
+        </div>
+        <span id="navBalanceVal" class="badge-amount">${formatted}</span>
       </div>
       <button class="btn-hdr-logout" onclick="handleLogout()">LOGOUT</button>
     `;
+    balanceEl = document.getElementById("navBalanceVal");
   } else {
     headerActions.innerHTML = `
       <!-- Outlined Sign-Up -->
@@ -1834,6 +1860,35 @@ function updateHeaderUI() {
       <!-- Filled Sign-In -->
       <button class="btn-hdr-signin" onclick="openAuthModal('signin')">SIGN-IN</button>
     `;
+    balanceEl = null;
+  }
+  updateDrawerUserInfo();
+}
+
+function updateDrawerUserInfo() {
+  const user = localStorage.getItem("helakash_user");
+  const drawerUserCard = document.getElementById("drawerUserCard");
+  const drawerUserPhone = document.getElementById("drawerUserPhone");
+  const walletAccountPhone = document.getElementById("walletAccountPhone");
+  const withdrawPhone = document.getElementById("withdrawPhone");
+  const depositPhone = document.getElementById("depositPhone");
+
+  if (user) {
+    if (drawerUserCard) drawerUserCard.style.display = "flex";
+    if (drawerUserPhone) drawerUserPhone.textContent = user;
+    if (walletAccountPhone) {
+      walletAccountPhone.style.display = "inline-block";
+      walletAccountPhone.textContent = `📱 ${user}`;
+    }
+    if (withdrawPhone && !withdrawPhone.value) {
+      withdrawPhone.value = user.startsWith("254") ? user.slice(3) : (user.startsWith("0") ? user.slice(1) : user);
+    }
+    if (depositPhone && !depositPhone.value) {
+      depositPhone.value = user.startsWith("254") ? user.slice(3) : (user.startsWith("0") ? user.slice(1) : user);
+    }
+  } else {
+    if (drawerUserCard) drawerUserCard.style.display = "none";
+    if (walletAccountPhone) walletAccountPhone.style.display = "none";
   }
 }
 

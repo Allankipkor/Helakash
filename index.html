@@ -57,9 +57,22 @@
         <button class="btn-drawer-close" onclick="toggleSidebarMenu()">&times;</button>
       </div>
       <div class="drawer-body">
+        <!-- User Profile Card in Drawer -->
+        <div class="drawer-user-card" id="drawerUserCard" style="display: none;">
+          <div class="drawer-user-avatar">
+            <svg viewBox="0 0 24 24" width="18" height="18" stroke="currentColor" stroke-width="2.5" fill="none">
+              <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path>
+              <circle cx="12" cy="7" r="4"></circle>
+            </svg>
+          </div>
+          <div class="drawer-user-meta">
+            <span class="drawer-user-label">Logged in as</span>
+            <span class="drawer-user-phone" id="drawerUserPhone">07XXXXXXXX</span>
+          </div>
+        </div>
         <div class="drawer-wallet-info">
           <span>Active Balance:</span>
-          <strong id="drawerBalanceVal">KES 500.00</strong>
+          <strong id="drawerBalanceVal">KES 0.00</strong>
         </div>
         <div class="drawer-menu-links">
           <a href="#games" onclick="toggleSidebarMenu()">Play Aviator</a>
@@ -274,8 +287,11 @@
               <p>Fund or cash out your gaming account</p>
             </div>
             <div class="wallet-balance-big">
-              <span>Account Wallet Balance</span>
-              <h2 id="walletBalanceVal">KES 500.00</h2>
+              <div style="display: flex; justify-content: space-between; align-items: center; width: 100%; margin-bottom: 6px;">
+                <span>Account Wallet Balance</span>
+                <span id="walletAccountPhone" style="font-size: 12px; color: #94a3b8; font-family: monospace, inherit; background: rgba(255,255,255,0.06); padding: 2px 8px; border-radius: 6px; display: none;">📱 07XXXXXXXX</span>
+              </div>
+              <h2 id="walletBalanceVal">KES 0.00</h2>
             </div>
             <button class="btn-submit-wallet btn-submit-deposit" onclick="openDepositModal('mpesa')"
               style="margin-bottom: 12px; font-size: 15px; font-weight: 700; padding: 16px;">

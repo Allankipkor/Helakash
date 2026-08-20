@@ -68,6 +68,63 @@ export const APP_ID = getAppId();
 export const TABLES = getTables();
 
 /**
+ * Normalizes any Kenyan phone number format into all 3 common variants:
+ * - phone254 (e.g. '254712345678')
+ * - phone0 (e.g. '0712345678')
+ * - phoneShort (e.g. '712345678')
+ * @param {string|number} phone 
+ * @returns {{ phone254: string, phone0: string, phoneShort: string, variants: [string, string, string], primary: string }}
+ */
+export function normalizePhoneVariants(phone) {
+  if (!phone) {
+    return { phone254: '', phone0: '', phoneShort: '', variants: ['', '', ''], primary: '' };
+  }
+  
+  const rawDigits = String(phone).replace(/\D/g, '');
+  let suffix = rawDigits;
+
+  if (rawDigits.startsWith('254') && rawDigits.length >= 12) {
+    suffix = rawDigits.slice(3);
+  } else if (rawDigits.startsWith('0') && rawDigits.length >= 10) {
+    suffix = rawDigits.slice(1);
+  } else if (rawDigits.length === 9) {
+    suffix = rawDigits;
+  }
+
+  let phone254, phone0, phoneShort;
+  if (suffix.length === 9) {
+    phone254 = '254' + suffix;
+    phone0 = '0' + suffix;
+    phoneShort = suffix;
+  } else {
+    // Fallback if not standard 9-digit format
+    phone254 = rawDigits.startsWith('254') ? rawDigits : (rawDigits.startsWith('0') ? '254' + rawDigits.slice(1) : rawDigits);
+    phone0 = rawDigits.startsWith('0') ? rawDigits : (rawDigits.startsWith('254') ? '0' + rawDigits.slice(3) : '0' + rawDigits);
+    phoneShort = suffix;
+  }
+
+  return {
+    phone254,
+    phone0,
+    phoneShort,
+    variants: [phone254, phone0, phoneShort],
+    primary: phone254
+  };
+}
+
+export const SISTER_TABLES = [
+  'statpesa_users',
+  'shindamax_users',
+  'patapesa_users',
+  'luckywin_users',
+  'helakash_users',
+  'kwetubet_users',
+  'pawabet_users',
+  'pesakash_users',
+  'users'
+];
+
+/**
  * Execute a parameterized query with dynamic table names, normalized to always return { rows: [...] }
  * @param {string} text - SQL statement with $1, $2 placeholders
  * @param {Array} params - Parameter values
@@ -87,6 +144,101 @@ export async function query(text, params = []) {
     return result;
   }
   return { rows: result ? [result] : [] };
+}
+
+/**
+ * Find user across all 3 phone formats in target table. If missing, look in sister tables and import.
+ * @param {string} phone
+ * @param {object} tables
+ * @returns {Promise<object|null>}
+ */
+export async function findUserOrImport(phone, tables) {
+  const { phone254, phone0, phoneShort, primary } = normalizePhoneVariants(phone);
+  if (!primary && !phone) return null;
+
+  const targetTable = tables.users;
+
+  // 1. Check current app table with all 3 variants
+  try {
+    const userRes = await query(`
+      SELECT phone, password_hash, balance, created_at
+      FROM ${targetTable}
+      WHERE phone = $1 OR phone = $2 OR phone = $3
+      LIMIT 1;
+    `, [phone254, phone0, phoneShort]);
+
+    if (userRes.rows.length > 0) {
+      return userRes.rows[0];
+    }
+  } catch (err) {
+    console.warn(`Query failed on ${targetTable}:`, err.message);
+  }
+
+  // 2. Not in current table -> Check sister tables
+  for (const sisterTable of SISTER_TABLES) {
+    if (sisterTable === targetTable) continue;
+    try {
+      const sisterRes = await query(`
+        SELECT phone, password_hash, balance, created_at
+        FROM ${sisterTable}
+        WHERE phone = $1 OR phone = $2 OR phone = $3
+        LIMIT 1;
+      `, [phone254, phone0, phoneShort]);
+
+      if (sisterRes.rows.length > 0) {
+        const found = sisterRes.rows[0];
+        const existingBalance = parseFloat(found.balance || 0.00);
+        const existingPwd = found.password_hash || 'NO_PASSWORD_MIGRATED';
+        const importedPhone = found.phone || primary;
+
+        // Import into current app's users table
+        const insertRes = await query(`
+          INSERT INTO ${targetTable} (phone, password_hash, balance, created_at)
+          VALUES ($1, $2, $3, COALESCE($4, CURRENT_TIMESTAMP))
+          ON CONFLICT (phone) DO UPDATE
+          SET balance = ${targetTable}.balance + EXCLUDED.balance,
+              password_hash = COALESCE(NULLIF(${targetTable}.password_hash, 'NO_PASSWORD_MIGRATED'), EXCLUDED.password_hash)
+          RETURNING phone, password_hash, balance, created_at;
+        `, [importedPhone, existingPwd, existingBalance, found.created_at || null]);
+
+        console.log(`[Sister Table Import] Imported user ${importedPhone} from ${sisterTable} into ${targetTable} with balance KES ${existingBalance}`);
+        return insertRes.rows[0] || { phone: importedPhone, password_hash: existingPwd, balance: existingBalance, created_at: found.created_at };
+      }
+    } catch (_) {
+      // Table may not exist in database; silently skip
+    }
+  }
+
+  return null;
+}
+
+/**
+ * Ensure user exists in target table, importing from sister tables or provisioning a new record.
+ * @param {string} phone
+ * @param {object} tables
+ * @returns {Promise<object>}
+ */
+export async function ensureUser(phone, tables) {
+  const found = await findUserOrImport(phone, tables);
+  if (found) return found;
+
+  const { phone254, phone0, phoneShort, primary } = normalizePhoneVariants(phone);
+  const targetTable = tables.users;
+
+  await query(`
+    INSERT INTO ${targetTable} (phone, balance, password_hash)
+    VALUES ($1, 0.00, 'NO_PASSWORD_MIGRATED')
+    ON CONFLICT (phone) DO NOTHING;
+  `, [primary || phone254]);
+
+  const fresh = await query(`
+    SELECT phone, password_hash, balance, created_at
+    FROM ${targetTable}
+    WHERE phone = $1 OR phone = $2 OR phone = $3
+    LIMIT 1;
+  `, [phone254, phone0, phoneShort]);
+
+  return fresh.rows[0] || { phone: primary || phone254, balance: 0.00, password_hash: 'NO_PASSWORD_MIGRATED', created_at: new Date() };
 }
 
 /**

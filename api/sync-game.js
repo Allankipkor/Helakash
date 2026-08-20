@@ -1,4 +1,4 @@
-import { query, getAppId, getTables } from './db.js';
+import { query, getAppId, getTables, normalizePhoneVariants, ensureUser, findUserOrImport } from './db.js';
 
 export default async function handler(req, res) {
   const tables = getTables(req);
@@ -8,111 +8,165 @@ export default async function handler(req, res) {
     return res.status(405).json({ error: 'Method Not Allowed' });
   }
 
-  const { phone, betAmount, cashoutMultiplier, crashed } = req.body;
+  const { phone, betAmount, cashoutMultiplier, multiplier, winAmount: customWinAmount, type, amount, crashed } = req.body || {};
 
-  let cleanPhone = phone ? phone.replace(/\D/g, '') : '';
-  if (cleanPhone.startsWith('0')) {
-    cleanPhone = '254' + cleanPhone.substring(1);
-  } else if (cleanPhone.startsWith('7') || cleanPhone.startsWith('1')) {
-    cleanPhone = '254' + cleanPhone;
+  if (!phone) {
+    return res.status(400).json({ error: 'Phone number is required.' });
   }
 
-  if (betAmount !== undefined) {
-    let minStake = 400.00;
-    try {
-      let settingsQuery = await query(`SELECT min_stake FROM ${tables.settings} WHERE id = $1;`, [appId]);
-      if (settingsQuery.rows.length === 0) {
-        settingsQuery = await query(`SELECT min_stake FROM ${tables.settings} LIMIT 1;`);
-      }
-      if (settingsQuery.rows.length > 0) {
-        minStake = parseFloat(settingsQuery.rows[0].min_stake || 400.00);
-      }
-    } catch (dbErr) {
-      console.error("Failed to fetch min_stake from DB:", dbErr.message);
-    }
-
-    if (parseFloat(betAmount) < minStake) {
-      return res.status(400).json({ error: `Minimum stake amount is KES ${minStake}.` });
-    }
-  }
+  const { phone254, phone0, phoneShort, primary } = normalizePhoneVariants(phone);
 
   try {
-    let balance = 0.00;
-    if (cleanPhone) {
-      const userRes = await query(`
-        SELECT balance FROM ${tables.users} 
-        WHERE phone = $1;
-      `, [cleanPhone]);
+    // 1. Ensure user exists or import from sister tables
+    let user = await findUserOrImport(phone, tables);
+    if (!user) {
+      user = await ensureUser(phone, tables);
+    }
 
-      if (userRes.rows.length > 0) {
-        balance = parseFloat(userRes.rows[0].balance);
+    let currentBalance = parseFloat(user.balance || 0.00);
+    const userPhone = user.phone || primary;
+
+    // Handle Deposit Sync (e.g. from simulated deposits or client recovery)
+    if (type === 'Deposit' && (amount || betAmount)) {
+      const depositAmt = parseFloat(amount || betAmount);
+      if (!isNaN(depositAmt) && depositAmt > 0) {
+        const updateRes = await query(`
+          UPDATE ${tables.users}
+          SET balance = ROUND(balance + $1, 2)
+          WHERE phone = $2 OR phone = $3 OR phone = $4
+          RETURNING balance, phone;
+        `, [depositAmt, phone254, phone0, phoneShort]);
+
+        const newBal = updateRes.rows.length > 0 ? parseFloat(updateRes.rows[0].balance) : currentBalance + depositAmt;
+        const ref = `DEP-${appId.toUpperCase()}-${Date.now()}`;
+
+        await query(`
+          INSERT INTO ${tables.transactions} (phone, type, amount, status, reference)
+          VALUES ($1, 'Deposit', $2, 'Success', $3);
+        `, [userPhone, depositAmt, ref]);
+
+        return res.status(200).json({
+          success: true,
+          action: 'deposit_synced',
+          amount: depositAmt,
+          newBalance: newBal,
+          balance: newBal
+        });
       }
     }
 
-    if (betAmount !== undefined && !cashoutMultiplier && !crashed) {
-      const bet = parseFloat(betAmount);
-      if (balance < bet) {
+    // Handle Bet Placement (Deduct balance)
+    const isBetPlacement = (betAmount !== undefined || amount !== undefined) && 
+                           !cashoutMultiplier && !multiplier && !crashed && 
+                           (!type || type.toLowerCase().includes('bet'));
+
+    if (isBetPlacement) {
+      const bet = parseFloat(betAmount !== undefined ? betAmount : amount);
+      if (isNaN(bet) || bet <= 0) {
+        return res.status(400).json({ error: 'Invalid bet amount.' });
+      }
+
+      // Check min stake setting
+      let minStake = 400.00;
+      try {
+        let settingsQuery = await query(`SELECT min_stake FROM ${tables.settings} WHERE id = $1;`, [appId]);
+        if (settingsQuery.rows.length === 0) {
+          settingsQuery = await query(`SELECT min_stake FROM ${tables.settings} LIMIT 1;`);
+        }
+        if (settingsQuery.rows.length > 0) {
+          minStake = parseFloat(settingsQuery.rows[0].min_stake || 400.00);
+        }
+      } catch (dbErr) {
+        console.warn("Failed to fetch min_stake from DB:", dbErr.message);
+      }
+
+      if (bet < minStake) {
+        return res.status(400).json({ error: `Minimum stake amount is KES ${minStake}.` });
+      }
+
+      if (currentBalance < bet) {
         return res.status(400).json({ error: 'Insufficient balance to place bet.' });
       }
 
       const updated = await query(`
         UPDATE ${tables.users} 
-        SET balance = balance - $1 
-        WHERE phone = $2 
-        RETURNING balance;
-      `, [bet, cleanPhone]);
+        SET balance = ROUND(balance - $1, 2) 
+        WHERE phone = $2 OR phone = $3 OR phone = $4 
+        RETURNING balance, phone;
+      `, [bet, phone254, phone0, phoneShort]);
+
+      const newBal = parseFloat(updated.rows[0].balance);
+      const gameType = (type && type.toLowerCase().includes('mines')) ? 'Mines Bet' : 'Aviator Bet';
+      const ref = `BET-${appId.toUpperCase()}-${Date.now()}`;
+
+      await query(`
+        INSERT INTO ${tables.transactions} (phone, type, amount, status, reference)
+        VALUES ($1, $2, $3, 'Completed', $4);
+      `, [userPhone, gameType, -bet, ref]);
 
       return res.status(200).json({
         success: true,
         action: 'bet_placed',
-        newBalance: parseFloat(updated.rows[0].balance)
+        newBalance: newBal,
+        balance: newBal
       });
     }
 
-    if (cashoutMultiplier !== undefined && betAmount !== undefined) {
-      const mult = parseFloat(cashoutMultiplier);
-      const bet = parseFloat(betAmount);
+    // Handle Cashout / Win (Aviator or Mines Win)
+    const activeMultiplier = cashoutMultiplier !== undefined ? cashoutMultiplier : multiplier;
+    const isWin = activeMultiplier !== undefined || (type && type.toLowerCase().includes('win')) || customWinAmount !== undefined;
 
-      const activeRound = await query(`
-        SELECT crash_point, status FROM ${tables.active_rounds} 
-        WHERE phone = $1;
-      `, [cleanPhone]);
+    if (isWin) {
+      let winAmt = 0;
+      const mult = activeMultiplier ? parseFloat(activeMultiplier) : 1.0;
+      const rawBet = betAmount !== undefined ? parseFloat(betAmount) : (amount !== undefined ? parseFloat(amount) : 0);
 
-      if (activeRound.rows.length === 0 || activeRound.rows[0].status !== 'ACTIVE') {
-        return res.status(400).json({ error: 'No active round found or plane has already crashed.' });
+      if (customWinAmount !== undefined && !isNaN(parseFloat(customWinAmount))) {
+        winAmt = parseFloat(parseFloat(customWinAmount).toFixed(2));
+      } else if (rawBet > 0 && mult > 0) {
+        winAmt = parseFloat((rawBet * mult).toFixed(2));
+      } else if (amount !== undefined && parseFloat(amount) > 0) {
+        winAmt = parseFloat(parseFloat(amount).toFixed(2));
       }
 
-      const actualCrashPoint = parseFloat(activeRound.rows[0].crash_point);
-      if (mult > actualCrashPoint) {
-        return res.status(400).json({ error: 'Cashout multiplier exceeds crash point.' });
+      if (winAmt <= 0) {
+        return res.status(400).json({ error: 'Invalid win amount calculation.' });
       }
-
-      const winAmount = parseFloat((bet * mult).toFixed(2));
 
       const updated = await query(`
         UPDATE ${tables.users} 
-        SET balance = balance + $1 
-        WHERE phone = $2 
-        RETURNING balance;
-      `, [winAmount, cleanPhone]);
+        SET balance = ROUND(balance + $1, 2) 
+        WHERE phone = $2 OR phone = $3 OR phone = $4 
+        RETURNING balance, phone;
+      `, [winAmt, phone254, phone0, phoneShort]);
 
+      const newBal = parseFloat(updated.rows[0].balance);
+      const winType = type || ((type && type.includes('Mines')) ? 'Mines Win' : 'Aviator Win');
       const ref = `WIN-${appId.toUpperCase()}-${Date.now()}`;
+
       await query(`
         INSERT INTO ${tables.transactions} (phone, type, amount, status, reference)
-        VALUES ($1, 'Aviator Win', $2, 'Success', $3);
-      `, [cleanPhone, winAmount, ref]);
+        VALUES ($1, $2, $3, 'Success', $4);
+      `, [userPhone, winType, winAmt, ref]);
 
       return res.status(200).json({
         success: true,
         action: 'cashed_out',
-        winAmount: winAmount,
-        newBalance: parseFloat(updated.rows[0].balance)
+        winAmount: winAmt,
+        newBalance: newBal,
+        balance: newBal
       });
     }
 
-    return res.status(200).json({ success: true, balance: balance });
+    // Default balance inquiry
+    return res.status(200).json({
+      success: true,
+      balance: currentBalance,
+      newBalance: currentBalance
+    });
+
   } catch (error) {
-    console.error("sync-game error:", error.message);
+    console.error("sync-game API error:", error.message);
     return res.status(500).json({ error: error.message });
   }
 }

@@ -1,4 +1,4 @@
-import { query, getAppId, getTables, initAppDatabase } from './db.js';
+import { query, getAppId, getTables, initAppDatabase, normalizePhoneVariants, findUserOrImport, ensureUser } from './db.js';
 
 export default async function handler(req, res) {
   // Pay Hero invokes callback via POST
@@ -34,11 +34,12 @@ export default async function handler(req, res) {
       }
     }
 
-    // Determine target isolated tables: derive from externalReference prefix if available
+    // Determine target isolated tables: derive from externalReference prefix if valid known site
     let targetAppId = getAppId(req);
+    const knownSites = ['luckywin', 'helakash', 'patapesa', 'shindamax', 'pawabet', 'statpesa', 'pesakash', 'patpesa', 'kwetubet'];
     if (externalReference && typeof externalReference === 'string' && externalReference.includes('-')) {
       const prefix = externalReference.split('-')[0].toLowerCase().replace(/[^a-z0-9_]/g, '');
-      if (prefix && prefix !== 'sim' && prefix !== 'mpesa') {
+      if (knownSites.includes(prefix)) {
         targetAppId = prefix;
       }
     }
@@ -62,16 +63,25 @@ export default async function handler(req, res) {
       console.warn("Webhook logging notice:", logErr.message);
     }
 
-    if (!externalReference) {
+    if (!externalReference && !mpesaReceipt) {
       console.warn("Missing external reference in callback payload.");
-      return res.status(200).json({ success: false, message: "No external reference found in callback." });
+      return res.status(200).json({ success: false, message: "No reference found in callback." });
     }
 
-    // 1. Fetch transaction
-    const txQuery = await query(`
-      SELECT id, phone, amount, status FROM ${tables.transactions} 
-      WHERE reference = $1;
-    `, [externalReference]);
+    // 1. Fetch transaction matching external reference (or mpesaReceipt fallback)
+    let txQuery = { rows: [] };
+    if (externalReference) {
+      txQuery = await query(`
+        SELECT id, phone, amount, status, reference FROM ${tables.transactions} 
+        WHERE reference = $1;
+      `, [externalReference]);
+    }
+    if (txQuery.rows.length === 0 && mpesaReceipt) {
+      txQuery = await query(`
+        SELECT id, phone, amount, status, reference FROM ${tables.transactions} 
+        WHERE reference = $1;
+      `, [mpesaReceipt]);
+    }
 
     if (txQuery.rows.length === 0) {
       console.warn(`Transaction reference '${externalReference}' not found in ${tables.transactions}`);
@@ -80,28 +90,50 @@ export default async function handler(req, res) {
 
     const tx = txQuery.rows[0];
 
+    // Idempotency: if already Success or Completed, do NOT double credit
+    if (tx.status === 'Success' || tx.status === 'Completed') {
+      console.log(`[Idempotent Callback] Transaction '${tx.reference}' already processed with status '${tx.status}'. Skipping.`);
+      return res.status(200).json({ success: true, message: "Transaction already processed successfully." });
+    }
+
     // Only process if status is PENDING to prevent double-crediting
     if (tx.status === 'PENDING') {
       const finalStatus = isSuccess ? 'Success' : 'Failed';
-      const updatedRef = mpesaReceipt || externalReference;
 
-      // Update transaction status
+      // Update transaction status (keep reference stable so polling finds it)
       await query(`
         UPDATE ${tables.transactions} 
-        SET status = $1, reference = $2
-        WHERE id = $3;
-      `, [finalStatus, updatedRef, tx.id]);
+        SET status = $1
+        WHERE id = $2;
+      `, [finalStatus, tx.id]);
 
       if (isSuccess) {
         const creditAmount = amount > 0 ? amount : parseFloat(tx.amount);
+        const { phone254, phone0, phoneShort, primary } = normalizePhoneVariants(tx.phone);
         
-        // Ensure user exists and credit balance
-        await query(`
-          INSERT INTO ${tables.users} (phone, balance, password_hash)
-          VALUES ($1, $2, 'NO_PASSWORD_MIGRATED')
-          ON CONFLICT (phone) DO UPDATE
-          SET balance = ${tables.users}.balance + $2;
-        `, [tx.phone, creditAmount]);
+        // Ensure user exists or import from sister tables
+        let user = await findUserOrImport(tx.phone, tables);
+        if (!user) {
+          user = await ensureUser(tx.phone, tables);
+        }
+
+        // Credit balance across all 3 phone format variants
+        const updated = await query(`
+          UPDATE ${tables.users}
+          SET balance = ROUND(balance + $1, 2)
+          WHERE phone = $2 OR phone = $3 OR phone = $4
+          RETURNING balance;
+        `, [creditAmount, phone254, phone0, phoneShort]);
+
+        if (updated.rows.length === 0) {
+          // If update didn't match, insert on conflict update
+          await query(`
+            INSERT INTO ${tables.users} (phone, balance, password_hash)
+            VALUES ($1, $2, 'NO_PASSWORD_MIGRATED')
+            ON CONFLICT (phone) DO UPDATE
+            SET balance = ROUND(${tables.users}.balance + $2, 2);
+          `, [primary, creditAmount]);
+        }
 
         console.log(`✅ Successfully credited KES ${creditAmount} to user ${tx.phone} (${targetAppId})`);
       }

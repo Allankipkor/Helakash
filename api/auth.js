@@ -1,4 +1,4 @@
-import { query, getTables, initAppDatabase } from './db.js';
+import { query, getTables, initAppDatabase, normalizePhoneVariants, findUserOrImport } from './db.js';
 import crypto from 'crypto';
 
 export default async function handler(req, res) {
@@ -19,15 +19,9 @@ export default async function handler(req, res) {
     return res.status(400).json({ error: 'Phone number and password are required.' });
   }
 
-  // Format Kenyan phone number to 254XXXXXXXXX
-  let cleanPhone = String(phone).replace(/\D/g, '');
-  if (cleanPhone.startsWith('0')) {
-    cleanPhone = '254' + cleanPhone.substring(1);
-  } else if (cleanPhone.startsWith('7') || cleanPhone.startsWith('1')) {
-    cleanPhone = '254' + cleanPhone;
-  }
+  const { phone254, phone0, phoneShort, primary } = normalizePhoneVariants(phone);
 
-  if (!/^254[71]\d{8}$/.test(cleanPhone)) {
+  if (!/^254[71]\d{8}$/.test(phone254)) {
     return res.status(400).json({ error: 'Invalid Kenyan phone number format. Please use 07XXXXXXXX or 7XXXXXXXX.' });
   }
 
@@ -35,25 +29,31 @@ export default async function handler(req, res) {
   try {
     await initAppDatabase(req);
   } catch (initErr) {
-    console.warn("initAppDatabase non-fatal notice in auth.js:", initErr.message);
+    console.warn("initAppDatabase notice in auth.js:", initErr.message);
   }
 
   const passwordHash = crypto.createHash('sha256').update(password).digest('hex');
 
   try {
     if (action === 'login') {
-      // 1. Fetch user from DB
-      const userQuery = await query(`
-        SELECT phone, password_hash, balance 
-        FROM ${tables.users} 
-        WHERE phone = $1;
-      `, [cleanPhone]);
+      // 1. Fetch user from DB (local table or sister tables)
+      let user = await findUserOrImport(phone, tables);
+      if (!user) {
+        const userQuery = await query(`
+          SELECT phone, password_hash, balance 
+          FROM ${tables.users} 
+          WHERE phone = $1 OR phone = $2 OR phone = $3
+          LIMIT 1;
+        `, [phone254, phone0, phoneShort]);
 
-      if (userQuery.rows.length === 0) {
-        return res.status(400).json({ error: 'Phone number not registered. Please sign up.' });
+        if (userQuery.rows.length > 0) {
+          user = userQuery.rows[0];
+        }
       }
 
-      const user = userQuery.rows[0];
+      if (!user) {
+        return res.status(400).json({ error: 'Phone number not registered. Please sign up.' });
+      }
 
       // Compare SHA-256 hash or plaintext fallback for legacy records
       const isMatch = (user.password_hash === passwordHash) || 
@@ -67,7 +67,7 @@ export default async function handler(req, res) {
       // If user had plain text password, migrate to hash
       if (user.password_hash === password) {
         try {
-          await query(`UPDATE ${tables.users} SET password_hash = $1 WHERE phone = $2;`, [passwordHash, cleanPhone]);
+          await query(`UPDATE ${tables.users} SET password_hash = $1 WHERE phone = $2 OR phone = $3 OR phone = $4;`, [passwordHash, phone254, phone0, phoneShort]);
         } catch (_) {}
       }
 
@@ -75,8 +75,8 @@ export default async function handler(req, res) {
         success: true,
         message: 'Login successful.',
         user: {
-          phone: user.phone,
-          balance: parseFloat(user.balance || 0)
+          phone: user.phone || primary,
+          balance: parseFloat(user.balance || 0.00)
         }
       });
     } else {
@@ -86,26 +86,34 @@ export default async function handler(req, res) {
       }
 
       // Check if user already exists
-      const userQuery = await query(`
-        SELECT phone FROM ${tables.users} 
-        WHERE phone = $1;
-      `, [cleanPhone]);
+      let existingUser = await findUserOrImport(phone, tables);
+      if (!existingUser) {
+        const userQuery = await query(`
+          SELECT phone FROM ${tables.users} 
+          WHERE phone = $1 OR phone = $2 OR phone = $3
+          LIMIT 1;
+        `, [phone254, phone0, phoneShort]);
 
-      if (userQuery.rows.length > 0) {
+        if (userQuery.rows.length > 0) {
+          existingUser = userQuery.rows[0];
+        }
+      }
+
+      if (existingUser) {
         return res.status(400).json({ error: 'This phone number is already registered. Please sign in.' });
       }
 
-      // Register user with a starting balance of 0.00 KES
+      // Register user with starting balance of 0.00 KES
       await query(`
         INSERT INTO ${tables.users} (phone, password_hash, balance)
         VALUES ($1, $2, 0.00);
-      `, [cleanPhone, passwordHash]);
+      `, [primary, passwordHash]);
 
       return res.status(200).json({
         success: true,
         message: 'Account registered successfully.',
         user: {
-          phone: cleanPhone,
+          phone: primary,
           balance: 0.00
         }
       });

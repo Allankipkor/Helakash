@@ -1,4 +1,4 @@
-import { query, getAppId, getTables } from './db.js';
+import { query, getAppId, getTables, normalizePhoneVariants, findUserOrImport, ensureUser } from './db.js';
 
 export default async function handler(req, res) {
   const appId = getAppId(req);
@@ -9,7 +9,7 @@ export default async function handler(req, res) {
     return res.status(405).json({ error: 'Method Not Allowed' });
   }
 
-  const { amount, phone, accountPhone } = req.body;
+  const { amount, phone, accountPhone } = req.body || {};
   if (!amount || !phone) {
     return res.status(400).json({ error: 'Amount and phone number are required.' });
   }
@@ -37,32 +37,22 @@ export default async function handler(req, res) {
     console.error("Failed to fetch settings from DB in deposit.js:", dbErr.message);
   }
 
-  if (parseInt(amount) < minDeposit) {
+  const depositAmount = parseFloat(amount);
+  if (isNaN(depositAmount) || depositAmount < minDeposit) {
     return res.status(400).json({ error: `Minimum deposit amount is KES ${minDeposit}.` });
   }
 
-  // Clean payment phone number (receives the STK push prompt)
-  let cleanPhone = phone.replace(/\D/g, '');
-  if (cleanPhone.startsWith('0')) {
-    cleanPhone = '254' + cleanPhone.substring(1);
-  } else if (cleanPhone.startsWith('7') || cleanPhone.startsWith('1')) {
-    cleanPhone = '254' + cleanPhone;
-  }
-
-  if (!/^254[71]\d{8}$/.test(cleanPhone)) {
+  // Payment phone number (receives the STK push prompt)
+  const { phone254: payPhone254, primary: payPhonePrimary } = normalizePhoneVariants(phone);
+  if (!/^254[71]\d{8}$/.test(payPhone254)) {
     return res.status(400).json({ error: 'Invalid Kenyan phone number format. Please use 07XXXXXXXX or 7XXXXXXXX.' });
   }
 
-  // Clean account phone number (game user account that gets credited)
+  // Target account phone (user account that gets credited)
   const targetAccountPhone = accountPhone || phone;
-  let cleanAccountPhone = targetAccountPhone.replace(/\D/g, '');
-  if (cleanAccountPhone.startsWith('0')) {
-    cleanAccountPhone = '254' + cleanAccountPhone.substring(1);
-  } else if (cleanAccountPhone.startsWith('7') || cleanAccountPhone.startsWith('1')) {
-    cleanAccountPhone = '254' + cleanAccountPhone;
-  }
+  const { phone254, phone0, phoneShort, primary: accountPrimary } = normalizePhoneVariants(targetAccountPhone);
 
-  if (!/^254[71]\d{8}$/.test(cleanAccountPhone)) {
+  if (!/^254[71]\d{8}$/.test(phone254)) {
     return res.status(400).json({ error: 'Invalid account phone number format.' });
   }
 
@@ -87,52 +77,56 @@ export default async function handler(req, res) {
     }
   }
 
-  // Fallback to SIMULATED mode if credentials are missing
-  if (!username || !password || !channelId) {
-    console.log("Pay Hero API credentials not configured. Running in SIMULATED mode.");
+  // 1. Ensure account user exists or import from sister tables
+  let user = await findUserOrImport(accountPrimary, tables);
+  if (!user) {
+    user = await ensureUser(accountPrimary, tables);
+  }
+  const userPhone = user.phone || accountPrimary;
 
-    // Simulate network delay
-    await new Promise(resolve => setTimeout(resolve, 1000));
+  // Fallback to SIMULATED mode if explicitly requested or if credentials are missing
+  if (req.body.simulated || !username || !password || !channelId) {
+    console.log("Running deposit in SIMULATED mode.");
 
     const reference = `SIM-${appId.toUpperCase()}-${Date.now()}`;
 
     try {
-      // Ensure user exists in DB
-      await query(`
-        INSERT INTO ${tables.users} (phone, balance, password_hash)
-        VALUES ($1, 0.00, 'NO_PASSWORD_MIGRATED')
-        ON CONFLICT (phone) DO NOTHING;
-      `, [cleanAccountPhone]);
-
       // Update balance directly in simulated mode
-      await query(`
+      const updateRes = await query(`
         UPDATE ${tables.users}
-        SET balance = balance + $1
-        WHERE phone = $2;
-      `, [parseFloat(amount), cleanAccountPhone]);
+        SET balance = ROUND(balance + $1, 2)
+        WHERE phone = $2 OR phone = $3 OR phone = $4
+        RETURNING balance, phone;
+      `, [depositAmount, phone254, phone0, phoneShort]);
 
-      // Log transaction in DB
+      const newBal = updateRes.rows.length > 0 ? parseFloat(updateRes.rows[0].balance) : parseFloat(user.balance || 0) + depositAmount;
+
+      // Log transaction with status 'Success' in DB
       await query(`
         INSERT INTO ${tables.transactions} (phone, type, amount, status, reference)
         VALUES ($1, 'Deposit', $2, 'Success', $3);
-      `, [cleanAccountPhone, parseFloat(amount), reference]);
+      `, [userPhone, depositAmount, reference]);
+
+      return res.status(200).json({
+        success: true,
+        message: "STK push initiated successfully (SIMULATED)",
+        reference: reference,
+        simulated: true,
+        newBalance: newBal,
+        balance: newBal
+      });
     } catch (dbErr) {
       console.error("Database transaction logging failed:", dbErr.message);
+      return res.status(500).json({ error: 'Database transaction failed: ' + dbErr.message });
     }
-
-    return res.status(200).json({
-      success: true,
-      message: "STK push initiated successfully (SIMULATED)",
-      reference: reference,
-      simulated: true
-    });
   }
 
+  // LIVE MODE
   try {
     const reference = `${appId.toUpperCase()}-${Date.now()}`;
     const payload = {
-      amount: parseInt(amount),
-      phone_number: cleanPhone,
+      amount: parseInt(depositAmount),
+      phone_number: payPhone254,
       channel_id: parseInt(channelId),
       provider: 'm-pesa',
       external_reference: reference
@@ -142,18 +136,11 @@ export default async function handler(req, res) {
       payload.callback_url = callbackUrl;
     }
 
-    // Ensure user exists in DB
-    await query(`
-      INSERT INTO ${tables.users} (phone, balance, password_hash)
-      VALUES ($1, 0.00, 'NO_PASSWORD_MIGRATED')
-      ON CONFLICT (phone) DO NOTHING;
-    `, [cleanAccountPhone]);
-
     // Log pending transaction in DB
     await query(`
       INSERT INTO ${tables.transactions} (phone, type, amount, status, reference)
       VALUES ($1, 'Deposit', $2, 'PENDING', $3);
-    `, [cleanAccountPhone, parseFloat(amount), reference]);
+    `, [userPhone, depositAmount, reference]);
 
     const auth = Buffer.from(`${username}:${password}`).toString('base64');
 
