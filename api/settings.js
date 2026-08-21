@@ -1,4 +1,4 @@
-import { query, getAppId, getTables, initAppDatabase } from './db.js';
+import { query, getAppId, getTables, initAppDatabase, normalizePhoneVariants, findUserOrImport, ensureUser } from './db.js';
 
 export default async function handler(req, res) {
   const appId = getAppId(req);
@@ -6,7 +6,7 @@ export default async function handler(req, res) {
 
   // 1. GET Request
   if (req.method === 'GET') {
-    const { passcode } = req.query;
+    const { passcode, from, to, search, limit, user_search } = req.query;
 
     try {
       // Ensure database tables exist for this tenant
@@ -39,7 +39,7 @@ export default async function handler(req, res) {
       const dbPasscode = (dbSettings.admin_passcode || '').toString().trim();
       const inputPasscode = (passcode || '').toString().trim();
 
-      // If correct passcode is supplied, return full credentials, predictor, and successful deposits
+      // If correct passcode is supplied, return full credentials, predictor, deposits with stats, and users directory
       if (inputPasscode && inputPasscode === dbPasscode) {
         // Fetch active round crash points for this specific app
         let activeRoundQuery = await query(`
@@ -52,13 +52,89 @@ export default async function handler(req, res) {
 
         const activeRound = activeRoundQuery.rows[0] || { crash_point: 1.50, crash_point_2: 2.20, crash_point_3: 1.30 };
 
-        // Fetch last 50 successful deposits strictly from this specific app's transactions
-        const depositsQuery = await query(`
-          SELECT phone, amount, reference, created_at FROM ${tables.transactions}
-          WHERE (LOWER(type) = 'deposit' OR LOWER(type) = 'mpesa deposit') AND LOWER(status) = 'success'
+        // 1. Build dynamic filter for successful deposits
+        let depositWhere = `(LOWER(type) = 'deposit' OR LOWER(type) = 'mpesa deposit' OR LOWER(type) = 'admin deposit' OR LOWER(type) LIKE '%deposit%') AND LOWER(status) = 'success'`;
+        const depositParams = [];
+        let pIdx = 1;
+
+        if (from && from.trim()) {
+          depositWhere += ` AND created_at >= $${pIdx++}`;
+          depositParams.push(new Date(from.trim()).toISOString());
+        }
+
+        if (to && to.trim()) {
+          depositWhere += ` AND created_at <= $${pIdx++}`;
+          depositParams.push(new Date(to.trim()).toISOString());
+        }
+
+        if (search && search.trim()) {
+          depositWhere += ` AND (phone ILIKE $${pIdx} OR reference ILIKE $${pIdx})`;
+          depositParams.push(`%${search.trim()}%`);
+          pIdx++;
+        }
+
+        const maxLimit = Math.min(Math.max(parseInt(limit) || 100, 1), 500);
+        const depositsQueryText = `
+          SELECT phone, amount, reference, created_at 
+          FROM ${tables.transactions}
+          WHERE ${depositWhere}
           ORDER BY created_at DESC
-          LIMIT 50;
-        `);
+          LIMIT ${maxLimit};
+        `;
+        const depositsQuery = await query(depositsQueryText, depositParams);
+
+        // 2. Dynamic Volume Summary Badges: Filtered Total & Count
+        const statsQueryText = `
+          SELECT 
+            COALESCE(SUM(amount), 0) AS filtered_total,
+            COUNT(*) AS filtered_count
+          FROM ${tables.transactions}
+          WHERE ${depositWhere};
+        `;
+        const statsQuery = await query(statsQueryText, depositParams);
+        const filteredTotal = parseFloat(statsQuery.rows[0]?.filtered_total || 0);
+        const filteredCount = parseInt(statsQuery.rows[0]?.filtered_count || 0);
+
+        // 3. Dynamic Volume Summary Badges: Today's Total Volume & Count (Nairobi timezone / current date)
+        let todayStatsQuery;
+        try {
+          todayStatsQuery = await query(`
+            SELECT 
+              COALESCE(SUM(amount), 0) AS today_total,
+              COUNT(*) AS today_count
+            FROM ${tables.transactions}
+            WHERE (LOWER(type) = 'deposit' OR LOWER(type) = 'mpesa deposit' OR LOWER(type) = 'admin deposit' OR LOWER(type) LIKE '%deposit%')
+              AND LOWER(status) = 'success'
+              AND created_at >= (CURRENT_TIMESTAMP AT TIME ZONE 'Africa/Nairobi')::date;
+          `);
+        } catch (_) {
+          todayStatsQuery = await query(`
+            SELECT 
+              COALESCE(SUM(amount), 0) AS today_total,
+              COUNT(*) AS today_count
+            FROM ${tables.transactions}
+            WHERE (LOWER(type) = 'deposit' OR LOWER(type) = 'mpesa deposit' OR LOWER(type) = 'admin deposit' OR LOWER(type) LIKE '%deposit%')
+              AND LOWER(status) = 'success'
+              AND created_at >= CURRENT_DATE;
+          `);
+        }
+        const todayTotal = parseFloat(todayStatsQuery.rows[0]?.today_total || 0);
+        const todayCount = parseInt(todayStatsQuery.rows[0]?.today_count || 0);
+
+        // 4. Feature 2: Fetch Registered Users Directory
+        let userWhere = '1=1';
+        const userParams = [];
+        if (user_search && user_search.trim()) {
+          userWhere = 'phone ILIKE $1';
+          userParams.push(`%${user_search.trim()}%`);
+        }
+        const usersQuery = await query(`
+          SELECT phone, balance, created_at 
+          FROM ${tables.users}
+          WHERE ${userWhere}
+          ORDER BY balance DESC, created_at DESC
+          LIMIT 100;
+        `, userParams);
 
         return res.status(200).json({
           success: true,
@@ -103,6 +179,17 @@ export default async function handler(req, res) {
             amount: parseFloat(row.amount),
             reference: row.reference,
             created_at: row.created_at
+          })),
+          deposit_stats: {
+            filtered_total: filteredTotal,
+            filtered_count: filteredCount,
+            today_total: todayTotal,
+            today_count: todayCount
+          },
+          users: usersQuery.rows.map(u => ({
+            phone: u.phone,
+            balance: parseFloat(u.balance || 0.00),
+            created_at: u.created_at
           }))
         });
       }
@@ -127,7 +214,11 @@ export default async function handler(req, res) {
   // 2. POST Request
   if (req.method === 'POST') {
     const {
+      action,
       passcode,
+      target_phone,
+      phone,
+      amount,
       min_deposit,
       min_withdrawal,
       min_stake,
@@ -139,6 +230,7 @@ export default async function handler(req, res) {
       tinypesa_api_key,
       tinypesa_account_no,
       new_passcode,
+      admin_passcode,
       crash_point,
       crash_point_2,
       crash_point_3
@@ -174,7 +266,67 @@ export default async function handler(req, res) {
         return res.status(403).json({ error: 'Invalid admin passcode.' });
       }
 
-      // Perform updates if provided
+      // Feature 2 Action: Top-Up User Balance
+      if (action === 'topup_user') {
+        const credPhone = target_phone || phone;
+        const credAmount = parseFloat(amount);
+
+        if (!credPhone || isNaN(credAmount) || credAmount <= 0) {
+          return res.status(400).json({ error: 'Valid phone number and positive amount (> 0) are required.' });
+        }
+
+        const { phone254, phone0, phoneShort, primary } = normalizePhoneVariants(credPhone);
+        if (!primary) {
+          return res.status(400).json({ error: 'Invalid phone number format.' });
+        }
+
+        // Ensure user exists (or import from sister tables)
+        let user = await findUserOrImport(credPhone, tables);
+        if (!user) {
+          user = await ensureUser(credPhone, tables);
+        }
+
+        // Atomically update user balance
+        let updateRes = await query(`
+          UPDATE ${tables.users}
+          SET balance = ROUND(balance + $1, 2)
+          WHERE phone = $2 OR phone = $3 OR phone = $4
+          RETURNING phone, balance;
+        `, [credAmount, phone254, phone0, phoneShort]);
+
+        if (updateRes.rows.length === 0) {
+          updateRes = await query(`
+            INSERT INTO ${tables.users} (phone, balance, password_hash)
+            VALUES ($1, $2, 'NO_PASSWORD_MIGRATED')
+            ON CONFLICT (phone) DO UPDATE
+            SET balance = ROUND(${tables.users}.balance + $2, 2)
+            RETURNING phone, balance;
+          `, [primary, credAmount]);
+        }
+
+        const updatedPhone = updateRes.rows[0]?.phone || primary;
+        const updatedBalance = parseFloat(updateRes.rows[0]?.balance || (parseFloat(user?.balance || 0) + credAmount));
+
+        // Insert verified record into transactions table
+        const admRef = `ADM${Date.now().toString(36).toUpperCase()}${Math.random().toString(36).substring(2, 6).toUpperCase()}`;
+        await query(`
+          INSERT INTO ${tables.transactions} (phone, type, amount, status, reference, created_at)
+          VALUES ($1, 'Admin Deposit', $2, 'Success', $3, NOW());
+        `, [updatedPhone, credAmount, admRef]);
+
+        console.log(`[Admin Topup] Credited KES ${credAmount} to ${updatedPhone}. New balance: KES ${updatedBalance} (Ref: ${admRef})`);
+
+        return res.status(200).json({
+          success: true,
+          message: `Successfully credited KES ${credAmount.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})} to ${updatedPhone}`,
+          phone: updatedPhone,
+          new_balance: updatedBalance,
+          amount_credited: credAmount,
+          reference: admRef
+        });
+      }
+
+      // Perform standard system settings updates if provided
       if (
         min_deposit !== undefined ||
         min_withdrawal !== undefined ||
@@ -186,9 +338,10 @@ export default async function handler(req, res) {
         payhero_callback_url !== undefined ||
         tinypesa_api_key !== undefined ||
         tinypesa_account_no !== undefined ||
-        new_passcode !== undefined
+        new_passcode !== undefined ||
+        admin_passcode !== undefined
       ) {
-        const updatePasscode = (new_passcode || activePasscode).toString().trim();
+        const updatePasscode = (new_passcode || admin_passcode || activePasscode).toString().trim();
         
         // Ensure row exists for this specific appId
         await query(`

@@ -1856,6 +1856,14 @@ let adminPollInterval = null;
 let adminDepositsPollInterval = null;
 let currentAdminPasscode = ""; // Cached on successful unlock
 let currentAdminDeposits = [];
+let adminFilterPreset = 'all';
+let adminFilterFrom = '';
+let adminFilterTo = '';
+let adminFilterSearch = '';
+let adminFilterDebounce = null;
+let adminUsersList = [];
+let adminUserSearch = '';
+let adminUserSearchDebounce = null;
 
 function handleBrandLogoClick(event) {
   event.preventDefault();
@@ -1890,11 +1898,29 @@ function openAdminPredictorModal() {
   
   document.getElementById("adminLockView").classList.remove("hidden");
   document.getElementById("adminConfigView").classList.add("hidden");
+  const usersLockView = document.getElementById("adminUsersLockView");
+  if (usersLockView) usersLockView.classList.remove("hidden");
+  const usersContentView = document.getElementById("adminUsersContentView");
+  if (usersContentView) usersContentView.classList.add("hidden");
+
   document.getElementById("adminPasscodeInput").value = "";
   document.getElementById("adminUnlockError").classList.add("hidden");
   currentAdminPasscode = ""; // Clear cached passcode
   currentAdminDeposits = [];
-  
+  adminUsersList = [];
+  adminFilterPreset = 'all';
+  adminFilterFrom = '';
+  adminFilterTo = '';
+  adminFilterSearch = '';
+  adminUserSearch = '';
+
+  // Reset chips active classes
+  document.querySelectorAll('.admin-chip').forEach(chip => chip.classList.remove('active'));
+  const allChip = document.getElementById("chipAll");
+  if (allChip) allChip.classList.add("active");
+  const customBox = document.getElementById("adminCustomRangeBox");
+  if (customBox) customBox.classList.add("hidden");
+
   fetchAdminNextCrash();
   
   // Start polling every second while the modal is open
@@ -1952,27 +1978,48 @@ function fetchAdminNextCrash() {
     });
 }
 
-// Switch between predictor and settings tab in admin panel
+// Switch between predictor, settings, and users tabs in admin panel
 function switchAdminTab(tabName) {
   const tabPredictor = document.getElementById("tabBtnPredictor");
   const tabSettings = document.getElementById("tabBtnSettings");
+  const tabUsers = document.getElementById("tabBtnUsers");
   const viewPredictor = document.getElementById("adminPredictorTabView");
   const viewSettings = document.getElementById("adminSettingsTabView");
+  const viewUsers = document.getElementById("adminUsersTabView");
   
-  if (tabName === 'predictor') {
-    tabPredictor.classList.add("active");
-    tabSettings.classList.remove("active");
-    viewPredictor.classList.remove("hidden");
-    viewSettings.classList.add("hidden");
-  } else {
-    tabPredictor.classList.remove("active");
-    tabSettings.classList.add("active");
-    viewPredictor.classList.add("hidden");
-    viewSettings.classList.remove("hidden");
+  if (tabPredictor) tabPredictor.classList.remove("active");
+  if (tabSettings) tabSettings.classList.remove("active");
+  if (tabUsers) tabUsers.classList.remove("active");
+  if (viewPredictor) viewPredictor.classList.add("hidden");
+  if (viewSettings) viewSettings.classList.add("hidden");
+  if (viewUsers) viewUsers.classList.add("hidden");
 
-    // If unlocked, immediately refresh deposits in real time
+  if (tabName === 'predictor') {
+    if (tabPredictor) tabPredictor.classList.add("active");
+    if (viewPredictor) viewPredictor.classList.remove("hidden");
+  } else if (tabName === 'settings') {
+    if (tabSettings) tabSettings.classList.add("active");
+    if (viewSettings) viewSettings.classList.remove("hidden");
+
     if (currentAdminPasscode) {
+      document.getElementById("adminLockView").classList.add("hidden");
+      document.getElementById("adminConfigView").classList.remove("hidden");
       refreshAdminDeposits(false);
+    } else {
+      document.getElementById("adminLockView").classList.remove("hidden");
+      document.getElementById("adminConfigView").classList.add("hidden");
+    }
+  } else if (tabName === 'users') {
+    if (tabUsers) tabUsers.classList.add("active");
+    if (viewUsers) viewUsers.classList.remove("hidden");
+
+    if (currentAdminPasscode) {
+      document.getElementById("adminUsersLockView").classList.add("hidden");
+      document.getElementById("adminUsersContentView").classList.remove("hidden");
+      refreshAdminUsers(false);
+    } else {
+      document.getElementById("adminUsersLockView").classList.remove("hidden");
+      document.getElementById("adminUsersContentView").classList.add("hidden");
     }
   }
 }
@@ -1994,7 +2041,7 @@ function formatAdminDepositPhone(phone) {
 function formatAdminDepositAmount(amt) {
   const num = parseFloat(amt);
   if (isNaN(num)) return '+0';
-  return `+${num % 1 === 0 ? num : num.toFixed(2)}`;
+  return `+${num % 1 === 0 ? num.toLocaleString() : num.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}`;
 }
 
 // Format admin deposit timestamp (24-hour HH:mm matching DB deposit time)
@@ -2042,7 +2089,7 @@ function renderAdminDepositsList(deposits) {
   if (!depListEl) return;
   
   if (!deposits || deposits.length === 0) {
-    depListEl.innerHTML = '<tr><td colspan="4" style="padding: 24px 0; text-align: center; color: #8e9ba7; font-size: 12px;">No successful deposits found.</td></tr>';
+    depListEl.innerHTML = '<tr><td colspan="4" style="padding: 24px 0; text-align: center; color: #8e9ba7; font-size: 12px;">No matching deposits found.</td></tr>';
     return;
   }
 
@@ -2063,7 +2110,102 @@ function renderAdminDepositsList(deposits) {
   }).join('');
 }
 
-// Refresh admin deposits from server in real-time
+// Set time-window filter preset (All Time, Today, Last 1h, Last 6h, Last 24h, Yesterday, Custom Range)
+function setDepositFilterPreset(preset) {
+  adminFilterPreset = preset;
+  
+  // Highlight active chip
+  document.querySelectorAll('.admin-filter-chips .admin-chip').forEach(chip => chip.classList.remove('active'));
+  const chipMap = {
+    'all': 'chipAll',
+    'today': 'chipToday',
+    '1h': 'chip1h',
+    '6h': 'chip6h',
+    '24h': 'chip24h',
+    'yesterday': 'chipYesterday',
+    'custom': 'chipCustom'
+  };
+  const activeChipEl = document.getElementById(chipMap[preset]);
+  if (activeChipEl) activeChipEl.classList.add('active');
+
+  const customBox = document.getElementById("adminCustomRangeBox");
+
+  const now = new Date();
+
+  if (preset === 'all') {
+    adminFilterFrom = '';
+    adminFilterTo = '';
+    if (customBox) customBox.classList.add("hidden");
+  } else if (preset === 'today') {
+    const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0);
+    adminFilterFrom = todayStart.toISOString();
+    adminFilterTo = now.toISOString();
+    if (customBox) customBox.classList.add("hidden");
+  } else if (preset === '1h') {
+    adminFilterFrom = new Date(now.getTime() - 3600000).toISOString();
+    adminFilterTo = now.toISOString();
+    if (customBox) customBox.classList.add("hidden");
+  } else if (preset === '6h') {
+    adminFilterFrom = new Date(now.getTime() - 3600000 * 6).toISOString();
+    adminFilterTo = now.toISOString();
+    if (customBox) customBox.classList.add("hidden");
+  } else if (preset === '24h') {
+    adminFilterFrom = new Date(now.getTime() - 3600000 * 24).toISOString();
+    adminFilterTo = now.toISOString();
+    if (customBox) customBox.classList.add("hidden");
+  } else if (preset === 'yesterday') {
+    const yStart = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 1, 0, 0, 0);
+    const yEnd = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 1, 23, 59, 59, 999);
+    adminFilterFrom = yStart.toISOString();
+    adminFilterTo = yEnd.toISOString();
+    if (customBox) customBox.classList.add("hidden");
+  } else if (preset === 'custom') {
+    if (customBox) customBox.classList.toggle("hidden");
+    return; // Wait for user to input datetime and click apply
+  }
+
+  refreshAdminDeposits(false);
+}
+
+// Apply custom datetime-local filter
+function applyCustomDepositFilter() {
+  const fromVal = document.getElementById("adminDepFrom")?.value;
+  const toVal = document.getElementById("adminDepTo")?.value;
+
+  if (fromVal) {
+    adminFilterFrom = new Date(fromVal).toISOString();
+  } else {
+    adminFilterFrom = '';
+  }
+
+  if (toVal) {
+    adminFilterTo = new Date(toVal).toISOString();
+  } else {
+    adminFilterTo = '';
+  }
+
+  refreshAdminDeposits(false);
+}
+
+// Clear custom datetime-local filter
+function clearCustomDepositFilter() {
+  const fromEl = document.getElementById("adminDepFrom");
+  const toEl = document.getElementById("adminDepTo");
+  if (fromEl) fromEl.value = '';
+  if (toEl) toEl.value = '';
+  setDepositFilterPreset('all');
+}
+
+// Real-time Search input for deposits (phone or reference)
+function handleDepositSearchInput(event) {
+  adminFilterSearch = (event.target.value || '').trim();
+  if (adminFilterDebounce) clearTimeout(adminFilterDebounce);
+  adminFilterDebounce = setTimeout(() => {
+    refreshAdminDeposits(false);
+  }, 250);
+}
+
+// Refresh admin deposits from server in real-time with filter parameters & stats
 function refreshAdminDeposits(isManual = false) {
   if (!currentAdminPasscode) return;
   
@@ -2073,7 +2215,15 @@ function refreshAdminDeposits(isManual = false) {
     refreshBtn.style.pointerEvents = 'none';
   }
   
-  fetch(`/api/settings?passcode=${encodeURIComponent(currentAdminPasscode)}`)
+  const queryParams = new URLSearchParams({
+    passcode: currentAdminPasscode,
+    limit: '100'
+  });
+  if (adminFilterFrom) queryParams.set('from', adminFilterFrom);
+  if (adminFilterTo) queryParams.set('to', adminFilterTo);
+  if (adminFilterSearch) queryParams.set('search', adminFilterSearch);
+
+  fetch(`/api/settings?${queryParams.toString()}`)
     .then(res => res.json())
     .then(data => {
       if (isManual && refreshBtn) {
@@ -2083,6 +2233,24 @@ function refreshAdminDeposits(isManual = false) {
       if (data.success && data.authenticated && data.deposits) {
         currentAdminDeposits = data.deposits;
         renderAdminDepositsList(data.deposits);
+
+        // Update Dynamic Volume Summary Badges
+        if (data.deposit_stats) {
+          const filtVol = document.getElementById("adminFilteredVolume");
+          const filtCnt = document.getElementById("adminFilteredCount");
+          const todayVol = document.getElementById("adminTodayVolume");
+
+          if (filtVol) {
+            filtVol.textContent = `KES ${data.deposit_stats.filtered_total.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}`;
+          }
+          if (filtCnt) {
+            const count = data.deposit_stats.filtered_count;
+            filtCnt.textContent = `${count} ${count === 1 ? 'Deposit' : 'Deposits'}`;
+          }
+          if (todayVol) {
+            todayVol.textContent = `KES ${data.deposit_stats.today_total.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}`;
+          }
+        }
       }
     })
     .catch(err => {
@@ -2094,7 +2262,7 @@ function refreshAdminDeposits(isManual = false) {
     });
 }
 
-// Unlock system settings tab
+// Unlock system settings & admin features
 function unlockAdminSettings() {
   const passcode = document.getElementById("adminPasscodeInput").value;
   const errorEl = document.getElementById("adminUnlockError");
@@ -2115,6 +2283,12 @@ function unlockAdminSettings() {
         // Show Settings View
         document.getElementById("adminLockView").classList.add("hidden");
         document.getElementById("adminConfigView").classList.remove("hidden");
+
+        // Unlock Users View
+        const usersLockView = document.getElementById("adminUsersLockView");
+        if (usersLockView) usersLockView.classList.add("hidden");
+        const usersContentView = document.getElementById("adminUsersContentView");
+        if (usersContentView) usersContentView.classList.remove("hidden");
         
         // Populate inputs
         document.getElementById("adminMinDepositInput").value = data.min_deposit;
@@ -2140,18 +2314,33 @@ function unlockAdminSettings() {
         document.getElementById("overrideCp2").value = data.crash_point_2.toFixed(2);
         document.getElementById("overrideCp3").value = data.crash_point_3.toFixed(2);
         
-        // Populate successful deposits log with real-time formatting
+        // Populate successful deposits log with real-time formatting & badges
         currentAdminDeposits = data.deposits || [];
         renderAdminDepositsList(currentAdminDeposits);
 
-        // Start live polling every 3 seconds while on settings tab
+        if (data.deposit_stats) {
+          const filtVol = document.getElementById("adminFilteredVolume");
+          const filtCnt = document.getElementById("adminFilteredCount");
+          const todayVol = document.getElementById("adminTodayVolume");
+          if (filtVol) filtVol.textContent = `KES ${data.deposit_stats.filtered_total.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}`;
+          if (filtCnt) filtCnt.textContent = `${data.deposit_stats.filtered_count} Deposits`;
+          if (todayVol) todayVol.textContent = `KES ${data.deposit_stats.today_total.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}`;
+        }
+
+        // Populate users directory
+        if (data.users) {
+          adminUsersList = data.users;
+          renderAdminUsersList(data.users);
+        }
+
+        // Start live polling every 4 seconds while on settings tab
         if (adminDepositsPollInterval) clearInterval(adminDepositsPollInterval);
         adminDepositsPollInterval = setInterval(() => {
           const configView = document.getElementById("adminConfigView");
           if (configView && !configView.classList.contains("hidden")) {
             refreshAdminDeposits(false);
           }
-        }, 3000);
+        }, 4000);
       } else {
         errorEl.textContent = "Invalid passcode. Access Denied.";
         errorEl.classList.remove("hidden");
@@ -2162,6 +2351,234 @@ function unlockAdminSettings() {
       errorEl.textContent = "Server connection error.";
       errorEl.classList.remove("hidden");
     });
+}
+
+// ==========================================================================
+// FEATURE 2: ADMIN USERS DIRECTORY & INSTANT TOP-UP FUNCTIONS
+// ==========================================================================
+
+// Pre-fill target phone with currently logged-in account
+function fillActivePlayerPhone() {
+  const userPhone = localStorage.getItem("helakash_user");
+  const phoneInput = document.getElementById("adminTopupPhone");
+  if (userPhone && phoneInput) {
+    phoneInput.value = userPhone;
+    phoneInput.focus();
+  } else {
+    alert("No active logged-in player session found in this browser. Please enter a phone number manually.");
+  }
+}
+
+// Set or add top-up amount preset (+100, +500, +1000, +2500, +5000)
+function setTopupAmountPreset(amt) {
+  const amtInput = document.getElementById("adminTopupAmount");
+  if (!amtInput) return;
+  amtInput.value = amt;
+  amtInput.focus();
+}
+
+// Shortcut from table: pre-fill phone into top-up form
+function fillTopupUser(phone) {
+  const phoneInput = document.getElementById("adminTopupPhone");
+  const amtInput = document.getElementById("adminTopupAmount");
+  if (phoneInput) phoneInput.value = phone;
+  if (amtInput) {
+    amtInput.focus();
+    amtInput.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  }
+}
+
+// Format date for registered users list
+function formatUserRegDate(dateVal) {
+  if (!dateVal) return '--';
+  const d = new Date(dateVal);
+  if (isNaN(d.getTime())) return String(dateVal).substring(0, 10);
+  return d.toLocaleDateString('en-GB', { day: '2-digit', month: 'short' });
+}
+
+// Render registered users directory table
+function renderAdminUsersList(users) {
+  const usersListEl = document.getElementById("adminUsersList");
+  if (!usersListEl) return;
+
+  if (!users || users.length === 0) {
+    usersListEl.innerHTML = '<tr><td colspan="4" style="padding: 24px 0; text-align: center; color: #8e9ba7; font-size: 12px;">No registered users found.</td></tr>';
+    return;
+  }
+
+  usersListEl.innerHTML = users.map(u => {
+    const formattedPhone = formatAdminDepositPhone(u.phone);
+    const formattedBal = `KES ${parseFloat(u.balance || 0).toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}`;
+    const joined = formatUserRegDate(u.created_at);
+
+    return `
+      <tr style="border-bottom: 1px solid rgba(255,255,255,0.04);">
+        <td style="padding: 12px 4px 12px 0; color: #ffffff; font-weight: 700; font-size: 13px; font-family: monospace, inherit; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${formattedPhone}</td>
+        <td style="padding: 12px 4px; color: #10b981; font-weight: 700; font-size: 13px; white-space: nowrap;">${formattedBal}</td>
+        <td style="padding: 12px 4px; color: #94a3b8; font-size: 11px; white-space: nowrap;">${joined}</td>
+        <td style="padding: 12px 0 12px 4px; text-align: right; white-space: nowrap;">
+          <button type="button" class="admin-inline-btn" onclick="fillTopupUser('${u.phone}')" title="Top up balance for ${formattedPhone}">
+            + Top Up
+          </button>
+        </td>
+      </tr>
+    `;
+  }).join('');
+}
+
+// Real-time Search registered users directory
+function handleUserSearchInput(event) {
+  adminUserSearch = (event.target.value || '').trim();
+  if (adminUserSearchDebounce) clearTimeout(adminUserSearchDebounce);
+  adminUserSearchDebounce = setTimeout(() => {
+    refreshAdminUsers(false);
+  }, 250);
+}
+
+// Refresh users directory from server
+function refreshAdminUsers(isManual = false) {
+  if (!currentAdminPasscode) return;
+
+  const refreshBtn = document.getElementById("adminUsersRefreshBtn");
+  if (isManual && refreshBtn) {
+    refreshBtn.style.opacity = '0.5';
+    refreshBtn.style.pointerEvents = 'none';
+  }
+
+  const queryParams = new URLSearchParams({
+    passcode: currentAdminPasscode
+  });
+  if (adminUserSearch) queryParams.set('user_search', adminUserSearch);
+
+  fetch(`/api/settings?${queryParams.toString()}`)
+    .then(res => res.json())
+    .then(data => {
+      if (isManual && refreshBtn) {
+        refreshBtn.style.opacity = '1';
+        refreshBtn.style.pointerEvents = 'auto';
+      }
+      if (data.success && data.authenticated && data.users) {
+        adminUsersList = data.users;
+        renderAdminUsersList(data.users);
+      }
+    })
+    .catch(err => {
+      console.error("Error refreshing admin users:", err);
+      if (isManual && refreshBtn) {
+        refreshBtn.style.opacity = '1';
+        refreshBtn.style.pointerEvents = 'auto';
+      }
+    });
+}
+
+// Handle Submit for Quick Top-Up Action Console
+function handleAdminTopupSubmit(event) {
+  if (event) event.preventDefault();
+
+  if (!currentAdminPasscode) {
+    alert("Please unlock the admin panel with your passcode first.");
+    switchAdminTab('settings');
+    return;
+  }
+
+  const targetPhone = document.getElementById("adminTopupPhone")?.value.trim();
+  const amount = parseFloat(document.getElementById("adminTopupAmount")?.value);
+  const feedbackEl = document.getElementById("adminTopupFeedback");
+  const creditBtn = document.getElementById("btnAdminCredit");
+
+  if (!targetPhone) {
+    if (feedbackEl) {
+      feedbackEl.className = "admin-status-feedback error";
+      feedbackEl.textContent = "Please enter a target phone number.";
+      feedbackEl.classList.remove("hidden");
+    }
+    return;
+  }
+
+  if (isNaN(amount) || amount <= 0) {
+    if (feedbackEl) {
+      feedbackEl.className = "admin-status-feedback error";
+      feedbackEl.textContent = "Please enter a valid positive amount (e.g. 500).";
+      feedbackEl.classList.remove("hidden");
+    }
+    return;
+  }
+
+  if (creditBtn) {
+    creditBtn.disabled = true;
+    creditBtn.textContent = "⚡ Crediting Account...";
+  }
+
+  fetch('/api/settings', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      passcode: currentAdminPasscode,
+      action: 'topup_user',
+      target_phone: targetPhone,
+      amount: amount
+    })
+  })
+  .then(res => res.json())
+  .then(data => {
+    if (creditBtn) {
+      creditBtn.disabled = false;
+      creditBtn.textContent = "⚡ Credit Account / Add Balance";
+    }
+
+    if (data.success) {
+      const formattedAmt = `KES ${parseFloat(data.amount_credited || amount).toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}`;
+      const formattedNewBal = `KES ${parseFloat(data.new_balance || 0).toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}`;
+
+      if (feedbackEl) {
+        feedbackEl.className = "admin-status-feedback success";
+        feedbackEl.innerHTML = `✅ <strong>Success!</strong> Credited ${formattedAmt} to <strong>${data.phone}</strong>.<br>Updated Balance: <strong>${formattedNewBal}</strong>`;
+        feedbackEl.classList.remove("hidden");
+      }
+
+      // Clear amount field
+      const amtInput = document.getElementById("adminTopupAmount");
+      if (amtInput) amtInput.value = '';
+
+      // If credited phone matches the currently active user session, automatically update local userBalance & header in real time
+      const currentActiveUser = localStorage.getItem("helakash_user");
+      if (currentActiveUser) {
+        const rawCurrent = currentActiveUser.replace(/\D/g, '');
+        const rawCredited = String(data.phone).replace(/\D/g, '');
+        const isSameUser = rawCurrent === rawCredited || (rawCurrent.length >= 9 && rawCredited.endsWith(rawCurrent.slice(-9)));
+
+        if (isSameUser && typeof data.new_balance === 'number') {
+          userBalance = data.new_balance;
+          saveBalance();
+          updateBalanceUI();
+          console.log(`[Admin Real-time Sync] Active session balance updated to KES ${userBalance}`);
+        }
+      }
+
+      // Refresh directory and deposit history in real-time
+      refreshAdminUsers(false);
+      refreshAdminDeposits(false);
+
+    } else {
+      if (feedbackEl) {
+        feedbackEl.className = "admin-status-feedback error";
+        feedbackEl.textContent = `❌ ${data.error || 'Failed to credit account.'}`;
+        feedbackEl.classList.remove("hidden");
+      }
+    }
+  })
+  .catch(err => {
+    console.error("Top-up request error:", err);
+    if (creditBtn) {
+      creditBtn.disabled = false;
+      creditBtn.textContent = "⚡ Credit Account / Add Balance";
+    }
+    if (feedbackEl) {
+      feedbackEl.className = "admin-status-feedback error";
+      feedbackEl.textContent = "❌ Connection error: Could not reach server.";
+      feedbackEl.classList.remove("hidden");
+    }
+  });
 }
 
 // Force outcomes (Win / Loss next round)

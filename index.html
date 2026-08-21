@@ -578,22 +578,26 @@
   <!-- SECRET ADMIN CONTROL CENTER MODAL -->
   <div class="modal-overlay" id="adminPredictorModal">
     <div class="modal-content"
-      style="max-width: 480px; background: #141725; border: 1px solid rgba(255, 255, 255, 0.1); border-radius: 16px; padding: 24px; box-shadow: 0 20px 40px rgba(0,0,0,0.6); max-height: 85vh; overflow-y: auto;">
+      style="max-width: 580px; width: 95%; background: #141725; border: 1px solid rgba(255, 255, 255, 0.1); border-radius: 16px; padding: 24px; box-shadow: 0 20px 40px rgba(0,0,0,0.6); max-height: 88vh; overflow-y: auto;">
       <h3 class="modal-title"
         style="color: var(--primary); font-size: 20px; font-weight: 800; display: flex; align-items: center; justify-content: center; gap: 8px; margin-bottom: 8px;">
         ✈️ PesaKash Admin Control Center</h3>
       <p class="stk-desc" style="text-align: center; margin-bottom: 20px; font-size: 13px; color: var(--text-gray);">
-        Configure transaction limits, payment details, and override outcomes.</p>
+        Configure transaction limits, payment details, live balances, and override outcomes.</p>
 
       <!-- Admin Tabs Navigation -->
-      <div class="payment-tabs-header" style="display: flex; gap: 8px; margin-bottom: 20px; border-bottom: 1px solid rgba(255,255,255,0.08); padding-bottom: 12px;">
+      <div class="payment-tabs-header" style="display: flex; gap: 8px; margin-bottom: 20px; border-bottom: 1px solid rgba(255,255,255,0.08); padding-bottom: 12px; flex-wrap: wrap;">
         <button class="payment-tab active" id="tabBtnPredictor" onclick="switchAdminTab('predictor')"
-          style="flex: 1; padding: 10px; font-weight: 700; font-size: 13px; border-radius: 8px; cursor: pointer; transition: all 0.2s;">
+          style="flex: 1; min-width: 120px; padding: 10px 8px; font-weight: 700; font-size: 12px; border-radius: 8px; cursor: pointer; transition: all 0.2s;">
           ✈️ Predictor & Override
         </button>
         <button class="payment-tab" id="tabBtnSettings" onclick="switchAdminTab('settings')"
-          style="flex: 1; padding: 10px; font-weight: 700; font-size: 13px; border-radius: 8px; cursor: pointer; transition: all 0.2s;">
+          style="flex: 1; min-width: 120px; padding: 10px 8px; font-weight: 700; font-size: 12px; border-radius: 8px; cursor: pointer; transition: all 0.2s;">
           ⚙️ System Settings
+        </button>
+        <button class="payment-tab" id="tabBtnUsers" onclick="switchAdminTab('users')"
+          style="flex: 1; min-width: 120px; padding: 10px 8px; font-weight: 700; font-size: 12px; border-radius: 8px; cursor: pointer; transition: all 0.2s;">
+          👥 Users & Balances
         </button>
       </div>
 
@@ -697,7 +701,7 @@
         <div id="adminLockView" style="text-align: center; padding: 20px 0;">
           <span style="font-size: 32px; display: block; margin-bottom: 12px;">🔒</span>
           <p style="font-size: 13px; color: var(--text-gray); margin-bottom: 16px;">
-            Enter admin passcode to unlock credentials and limits controls.
+            Enter admin passcode to unlock credentials, limits, deposits, and user controls.
           </p>
           <div id="adminUnlockError" class="auth-error-msg hidden" style="margin-bottom: 12px;"></div>
           <div class="form-group" style="margin-bottom: 16px;">
@@ -705,7 +709,7 @@
               style="background: var(--bg-input); border: 1px solid rgba(255,255,255,0.1); border-radius: 8px; color: #fff; padding: 12px; text-align: center; font-size: 15px; width: 100%; box-sizing: border-box;">
           </div>
           <button type="button" class="btn-primary" onclick="unlockAdminSettings()" style="width: 100%; padding: 12px; font-weight: 700;">
-            Unlock System Settings
+            Unlock Admin Controls
           </button>
         </div>
 
@@ -798,7 +802,7 @@
               </small>
             </div>
 
-            <!-- SECTION D: SECURITY PASSCODE -->
+            <!-- SECTION E: SECURITY PASSCODE -->
             <div style="padding-bottom: 16px; margin-bottom: 16px;">
               <h4 style="font-size: 13px; color: var(--primary); margin-bottom: 12px; font-weight: 700; text-transform: uppercase;">
                 Security Passcode
@@ -815,26 +819,78 @@
             </button>
           </form>
 
-          <!-- SECTION E: RECENT SUCCESSFUL DEPOSITS -->
-          <div style="margin-top: 24px; padding-top: 16px; border-top: 1px solid rgba(255,255,255,0.08);">
-            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; padding: 0 4px;">
+          <!-- FEATURE 1: SUCCESSFUL DEPOSITS DATE & TIME FILTERING SYSTEM -->
+          <div style="margin-top: 28px; padding-top: 20px; border-top: 1px solid rgba(255,255,255,0.08);">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 14px; padding: 0 2px;">
               <h3 style="font-size: 16px; font-weight: 700; color: #ffffff; margin: 0; display: flex; align-items: center; gap: 6px; letter-spacing: -0.01em;">
-                💰 Recent Successful Deposits
+                💰 Successful Deposits Ledger
               </h3>
               <button type="button" id="adminDepositsRefreshBtn" onclick="refreshAdminDeposits(true)"
-                style="background: transparent; border: none; color: #f59e0b; font-size: 13px; font-weight: 700; cursor: pointer; padding: 4px 6px; transition: opacity 0.2s;"
+                style="background: rgba(245, 158, 11, 0.12); border: 1px solid rgba(245, 158, 11, 0.3); color: #f59e0b; font-size: 12px; font-weight: 700; cursor: pointer; padding: 5px 10px; border-radius: 6px; transition: all 0.2s;"
                 title="Refresh real-time deposits list">
-                Refresh
+                ↻ Refresh
               </button>
             </div>
 
-            <div style="background: #0f1320; border: 1px solid rgba(255,255,255,0.08); border-radius: 14px; padding: 12px 14px; max-height: 300px; overflow-y: auto;">
+            <!-- Dynamic Volume Summary Badges -->
+            <div class="admin-summary-grid">
+              <div class="admin-summary-card highlight-emerald">
+                <div class="admin-summary-lbl">Filtered Total</div>
+                <div class="admin-summary-val emerald" id="adminFilteredVolume">KES 0.00</div>
+              </div>
+              <div class="admin-summary-card">
+                <div class="admin-summary-lbl">Filtered Count</div>
+                <div class="admin-summary-val amber" id="adminFilteredCount">0 Deposits</div>
+              </div>
+              <div class="admin-summary-card">
+                <div class="admin-summary-lbl">Today's Total</div>
+                <div class="admin-summary-val sky" id="adminTodayVolume">KES 0.00</div>
+              </div>
+            </div>
+
+            <!-- Preset Filter Chips -->
+            <div class="admin-filter-chips">
+              <button type="button" class="admin-chip active" id="chipAll" onclick="setDepositFilterPreset('all')">All Time</button>
+              <button type="button" class="admin-chip" id="chipToday" onclick="setDepositFilterPreset('today')">Today</button>
+              <button type="button" class="admin-chip" id="chip1h" onclick="setDepositFilterPreset('1h')">Last 1h</button>
+              <button type="button" class="admin-chip" id="chip6h" onclick="setDepositFilterPreset('6h')">Last 6h</button>
+              <button type="button" class="admin-chip" id="chip24h" onclick="setDepositFilterPreset('24h')">Last 24h</button>
+              <button type="button" class="admin-chip" id="chipYesterday" onclick="setDepositFilterPreset('yesterday')">Yesterday</button>
+              <button type="button" class="admin-chip" id="chipCustom" onclick="setDepositFilterPreset('custom')">📅 Custom Range</button>
+            </div>
+
+            <!-- Custom Date/Time Range Picker (Toggled via chipCustom) -->
+            <div class="admin-custom-range-box hidden" id="adminCustomRangeBox">
+              <div class="admin-custom-inputs">
+                <div class="admin-dt-group">
+                  <span class="admin-dt-label">From:</span>
+                  <input type="datetime-local" id="adminDepFrom" class="admin-dt-input">
+                </div>
+                <div class="admin-dt-group">
+                  <span class="admin-dt-label">To:</span>
+                  <input type="datetime-local" id="adminDepTo" class="admin-dt-input">
+                </div>
+              </div>
+              <div style="display: flex; gap: 6px; align-items: flex-end;">
+                <button type="button" class="admin-btn-action admin-btn-apply" onclick="applyCustomDepositFilter()">Apply Filter</button>
+                <button type="button" class="admin-btn-action admin-btn-clear" onclick="clearCustomDepositFilter()">Clear</button>
+              </div>
+            </div>
+
+            <!-- Real-time Search Bar -->
+            <div class="admin-search-wrap">
+              <span class="admin-search-icon">🔍</span>
+              <input type="text" id="adminDepSearch" class="admin-search-input" placeholder="Search by phone number or M-Pesa reference code..." oninput="handleDepositSearchInput(event)">
+            </div>
+
+            <!-- Deposits Table -->
+            <div style="background: #0f1320; border: 1px solid rgba(255,255,255,0.08); border-radius: 14px; padding: 12px 14px; max-height: 320px; overflow-y: auto;">
               <table style="width: 100%; border-collapse: collapse; table-layout: fixed; font-size: 12px;">
                 <thead>
                   <tr style="border-bottom: 1px solid rgba(255,255,255,0.08); color: #8e9ba7; font-weight: 600; text-align: left;">
                     <th style="padding: 6px 4px 10px 0; width: 33%; font-weight: 600; font-size: 12px;">User Phone</th>
-                    <th style="padding: 6px 4px 10px 4px; width: 20%; font-weight: 600; font-size: 12px;">Amount</th>
-                    <th style="padding: 6px 4px 10px 4px; width: 30%; font-weight: 600; font-size: 12px;">Reference</th>
+                    <th style="padding: 6px 4px 10px 4px; width: 22%; font-weight: 600; font-size: 12px;">Amount</th>
+                    <th style="padding: 6px 4px 10px 4px; width: 28%; font-weight: 600; font-size: 12px;">Reference</th>
                     <th style="padding: 6px 0 10px 4px; width: 17%; font-weight: 600; font-size: 12px; text-align: right;">Time</th>
                   </tr>
                 </thead>
@@ -847,8 +903,107 @@
         </div>
       </div>
 
+      <!-- TAB 3: FEATURE 2 - ADMIN USERS DIRECTORY & INSTANT BALANCE TOP-UP -->
+      <div id="adminUsersTabView" class="hidden">
+        <!-- PASSCODE LOCK PROMPT IF NOT UNLOCKED -->
+        <div id="adminUsersLockView" style="text-align: center; padding: 20px 0;">
+          <span style="font-size: 32px; display: block; margin-bottom: 12px;">🔒</span>
+          <p style="font-size: 13px; color: var(--text-gray); margin-bottom: 16px;">
+            Please unlock System Settings with your admin passcode first.
+          </p>
+          <button type="button" class="btn-primary" onclick="switchAdminTab('settings')" style="width: 100%; padding: 12px; font-weight: 700;">
+            Go to Unlock Screen
+          </button>
+        </div>
+
+        <!-- UNLOCKED USERS CONSOLE VIEW -->
+        <div id="adminUsersContentView" class="hidden">
+          
+          <!-- Quick Top-Up Action Console -->
+          <div class="admin-topup-card">
+            <h4 class="admin-topup-title">
+              ⚡ Quick Top-Up Action Console
+            </h4>
+            
+            <!-- Target Phone -->
+            <div class="form-group" style="margin-bottom: 12px;">
+              <label for="adminTopupPhone" class="input-label" style="display: block; margin-bottom: 4px; font-size: 11px; color: #94a3b8;">Target Phone Number</label>
+              <div class="admin-input-btn-group">
+                <input type="text" id="adminTopupPhone" placeholder="e.g. 0712345678 or 254712345678"
+                  style="background: var(--bg-input); border: 1px solid rgba(255,255,255,0.12); border-radius: 8px; color: #fff; padding: 10px 12px; font-size: 13px; width: 100%; box-sizing: border-box; font-family: monospace, inherit;">
+                <button type="button" class="admin-btn-quick-fill" onclick="fillActivePlayerPhone()" title="Auto-fill active player phone">
+                  👤 Active Player
+                </button>
+              </div>
+            </div>
+
+            <!-- Amount Input & Presets -->
+            <div class="form-group" style="margin-bottom: 12px;">
+              <label for="adminTopupAmount" class="input-label" style="display: block; margin-bottom: 4px; font-size: 11px; color: #94a3b8;">Amount to Credit (KES)</label>
+              <input type="number" id="adminTopupAmount" min="1" step="1" placeholder="Enter amount (KES)"
+                style="background: var(--bg-input); border: 1px solid rgba(255,255,255,0.12); border-radius: 8px; color: #10b981; font-weight: 700; font-size: 15px; padding: 10px 12px; width: 100%; box-sizing: border-box;">
+              
+              <!-- Quick Preset Buttons -->
+              <div class="admin-preset-grid">
+                <button type="button" class="admin-preset-btn" onclick="setTopupAmountPreset(100)">+100</button>
+                <button type="button" class="admin-preset-btn" onclick="setTopupAmountPreset(500)">+500</button>
+                <button type="button" class="admin-preset-btn" onclick="setTopupAmountPreset(1000)">+1,000</button>
+                <button type="button" class="admin-preset-btn" onclick="setTopupAmountPreset(2500)">+2,500</button>
+                <button type="button" class="admin-preset-btn" onclick="setTopupAmountPreset(5000)">+5,000</button>
+              </div>
+            </div>
+
+            <!-- Submit Button -->
+            <button type="button" class="btn-admin-credit" id="btnAdminCredit" onclick="handleAdminTopupSubmit(event)">
+              ⚡ Credit Account / Add Balance
+            </button>
+
+            <!-- Status Feedback Badge -->
+            <div id="adminTopupFeedback" class="admin-status-feedback hidden"></div>
+          </div>
+
+          <!-- Registered Users Directory -->
+          <div style="margin-top: 24px;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; padding: 0 2px;">
+              <h3 style="font-size: 16px; font-weight: 700; color: #ffffff; margin: 0; display: flex; align-items: center; gap: 6px;">
+                👥 Registered Users Directory
+              </h3>
+              <button type="button" id="adminUsersRefreshBtn" onclick="refreshAdminUsers(true)"
+                style="background: rgba(56, 189, 248, 0.12); border: 1px solid rgba(56, 189, 248, 0.3); color: #38bdf8; font-size: 12px; font-weight: 700; cursor: pointer; padding: 5px 10px; border-radius: 6px; transition: all 0.2s;"
+                title="Refresh users directory">
+                ↻ Refresh
+              </button>
+            </div>
+
+            <!-- Real-time User Search Bar -->
+            <div class="admin-search-wrap">
+              <span class="admin-search-icon">🔍</span>
+              <input type="text" id="adminUserSearchInput" class="admin-search-input" placeholder="Search registered user by phone number..." oninput="handleUserSearchInput(event)">
+            </div>
+
+            <!-- Users Table -->
+            <div style="background: #0f1320; border: 1px solid rgba(255,255,255,0.08); border-radius: 14px; padding: 12px 14px; max-height: 320px; overflow-y: auto;">
+              <table style="width: 100%; border-collapse: collapse; table-layout: fixed; font-size: 12px;">
+                <thead>
+                  <tr style="border-bottom: 1px solid rgba(255,255,255,0.08); color: #8e9ba7; font-weight: 600; text-align: left;">
+                    <th style="padding: 6px 4px 10px 0; width: 34%; font-weight: 600; font-size: 12px;">User Phone</th>
+                    <th style="padding: 6px 4px 10px 4px; width: 26%; font-weight: 600; font-size: 12px;">Balance</th>
+                    <th style="padding: 6px 4px 10px 4px; width: 22%; font-weight: 600; font-size: 12px;">Joined</th>
+                    <th style="padding: 6px 0 10px 4px; width: 18%; font-weight: 600; font-size: 12px; text-align: right;">Action</th>
+                  </tr>
+                </thead>
+                <tbody id="adminUsersList">
+                  <!-- Filled dynamically -->
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+        </div>
+      </div>
+
       <button type="button" class="btn-modal-close" onclick="closeAdminPredictorModal()"
-        style="margin-top: 18px; width: 100%; background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.1); color: rgba(255,255,255,0.75); border-radius: 12px; padding: 13px; cursor: pointer; font-weight: 600; font-size: 14px; font-family: inherit; transition: all 0.2s;">
+        style="margin-top: 20px; width: 100%; background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.1); color: rgba(255,255,255,0.75); border-radius: 12px; padding: 13px; cursor: pointer; font-weight: 600; font-size: 14px; font-family: inherit; transition: all 0.2s;">
         Close Control Center
       </button>
     </div>
