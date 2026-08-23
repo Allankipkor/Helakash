@@ -699,6 +699,40 @@
           </button>
         </div>
 
+        <!-- FLIGHT PACE & SPEED CONTROLLER -->
+        <div style="background: rgba(255,255,255,0.02); border: 1px solid rgba(255,255,255,0.05); border-radius: 12px; padding: 16px; margin-bottom: 20px;">
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
+            <h4 style="font-size: 13px; color: #38bdf8; margin: 0; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; display: flex; align-items: center; gap: 6px;">
+              ⚡ Multiplier Speed / Pace
+            </h4>
+            <span id="adminActiveSpeedBadge" style="font-size: 11px; padding: 3px 8px; border-radius: 4px; background: rgba(56, 189, 248, 0.15); color: #38bdf8; font-weight: 800; text-transform: uppercase; letter-spacing: 0.05em;">
+              NORMAL
+            </span>
+          </div>
+          
+          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 10px;">
+            <button type="button" class="btn-speed-preset" id="speedBtn_slow" onclick="setAdminAviatorSpeed('slow')"
+              style="font-size: 12px; font-weight: 700; padding: 8px; background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.1); color: #fff; border-radius: 6px; cursor: pointer; transition: all 0.2s;">
+              🐢 Slow (~7s 2x)
+            </button>
+            <button type="button" class="btn-speed-preset" id="speedBtn_normal" onclick="setAdminAviatorSpeed('normal')"
+              style="font-size: 12px; font-weight: 700; padding: 8px; background: rgba(56, 189, 248, 0.25); border: 1.5px solid #38bdf8; color: #fff; border-radius: 6px; cursor: pointer; transition: all 0.2s;">
+              ✈️ Normal (~5.5s 2x)
+            </button>
+            <button type="button" class="btn-speed-preset" id="speedBtn_fast" onclick="setAdminAviatorSpeed('fast')"
+              style="font-size: 12px; font-weight: 700; padding: 8px; background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.1); color: #fff; border-radius: 6px; cursor: pointer; transition: all 0.2s;">
+              ⚡ Fast (~4s 2x)
+            </button>
+            <button type="button" class="btn-speed-preset" id="speedBtn_turbo" onclick="setAdminAviatorSpeed('turbo')"
+              style="font-size: 12px; font-weight: 700; padding: 8px; background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.1); color: #fff; border-radius: 6px; cursor: pointer; transition: all 0.2s;">
+              🚀 Turbo (~3s 2x)
+            </button>
+          </div>
+          <small style="color: #94a3b8; font-size: 11px; display: block;">
+            💡 Instant Control: Click any preset above to immediately slow down or speed up the multiplier climb rate.
+          </small>
+        </div>
+
         <button type="button" class="btn-primary" onclick="fetchAdminNextCrash()"
           style="width: 100%; font-weight: 700; margin-bottom: 10px;">Manual Refresh</button>
       </div>
@@ -725,10 +759,10 @@
         <div id="adminConfigView" class="hidden">
           <form id="adminSettingsForm" onsubmit="handleAdminSettingsSubmit(event)">
             
-            <!-- SECTION A: LIMITS -->
+            <!-- SECTION A: LIMITS & PACE -->
             <div style="border-bottom: 1px solid rgba(255,255,255,0.08); padding-bottom: 16px; margin-bottom: 16px;">
               <h4 style="font-size: 13px; color: var(--primary); margin-bottom: 12px; font-weight: 700; text-transform: uppercase;">
-                Gaming Limits
+                Gaming Limits & Multiplier Pace
               </h4>
               <div class="form-group" style="margin-bottom: 10px;">
                 <label for="adminMinDepositInput" class="input-label" style="display: block; margin-bottom: 4px; font-size: 11px;">Minimum Deposit (KES)</label>
@@ -744,6 +778,16 @@
                 <label for="adminMinStakeInput" class="input-label" style="display: block; margin-bottom: 4px; font-size: 11px;">Minimum Stake (KES)</label>
                 <input type="number" id="adminMinStakeInput" required min="1"
                   style="background: var(--bg-input); border: 1px solid rgba(255,255,255,0.1); border-radius: 6px; color: #fff; padding: 8px; font-size: 13px; width: 100%; box-sizing: border-box;">
+              </div>
+              <div class="form-group" style="margin-bottom: 10px;">
+                <label for="adminAviatorSpeedSelect" class="input-label" style="display: block; margin-bottom: 4px; font-size: 11px; color: #38bdf8; font-weight: 600;">Aviator Multiplier Climb Speed</label>
+                <select id="adminAviatorSpeedSelect"
+                  style="background: var(--bg-input); border: 1px solid rgba(56, 189, 248, 0.4); border-radius: 6px; color: #fff; padding: 8px; font-size: 13px; width: 100%; box-sizing: border-box; cursor: pointer;">
+                  <option value="slow">🐢 Slow / Gentle (~7.0s to 2x, ~22s to 10x)</option>
+                  <option value="normal" selected>✈️ Normal / Standard (~5.5s to 2x, ~18s to 10x)</option>
+                  <option value="fast">⚡ Fast / Rapid (~4.0s to 2x, ~12s to 10x)</option>
+                  <option value="turbo">🚀 Turbo (~3.0s to 2x, ~8.5s to 10x)</option>
+                </select>
               </div>
             </div>
 

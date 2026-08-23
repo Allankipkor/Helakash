@@ -319,6 +319,7 @@ export async function initAppDatabase(req) {
       payhero_callback_url VARCHAR(255),
       tinypesa_api_key VARCHAR(255),
       tinypesa_account_no VARCHAR(255),
+      aviator_speed VARCHAR(50) DEFAULT 'normal',
       admin_passcode VARCHAR(255) DEFAULT 'Aa@123'
     );
   `);
@@ -328,6 +329,7 @@ export async function initAppDatabase(req) {
     await query(`ALTER TABLE ${tables.settings} ADD COLUMN IF NOT EXISTS active_gateway VARCHAR(50) DEFAULT 'payhero';`);
     await query(`ALTER TABLE ${tables.settings} ADD COLUMN IF NOT EXISTS tinypesa_api_key VARCHAR(255);`);
     await query(`ALTER TABLE ${tables.settings} ADD COLUMN IF NOT EXISTS tinypesa_account_no VARCHAR(255);`);
+    await query(`ALTER TABLE ${tables.settings} ADD COLUMN IF NOT EXISTS aviator_speed VARCHAR(50) DEFAULT 'normal';`);
   } catch (_) {}
 
   // Seed default settings row for this APP_ID

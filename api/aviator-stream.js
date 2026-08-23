@@ -4,6 +4,20 @@ export const config = {
   maxDuration: 60, // Maximum execution duration for Vercel functions (60s on Hobby tier)
 };
 
+export function getSpeedCurveParams(speed) {
+  switch (String(speed || '').toLowerCase().trim()) {
+    case 'slow':
+      return { speed: 'slow', divisor: 7000, exponent: 1.90 };
+    case 'fast':
+      return { speed: 'fast', divisor: 4000, exponent: 1.65 };
+    case 'turbo':
+      return { speed: 'turbo', divisor: 3000, exponent: 1.50 };
+    case 'normal':
+    default:
+      return { speed: 'normal', divisor: 5500, exponent: 1.88 };
+  }
+}
+
 export default async function handler(req, res) {
   const appId = getAppId(req);
   const tables = getTables(req);
@@ -35,8 +49,18 @@ export default async function handler(req, res) {
   }
 
   let crashPoint, crashPoint2, crashPoint3, globalCreatedAt;
+  let speedSetting = 'normal';
   
   try {
+    // 0. Fetch speed setting for this app
+    try {
+      const speedQuery = await query(`SELECT aviator_speed FROM ${tables.settings} WHERE id = $1;`, [appId]);
+      if (speedQuery.rows.length > 0 && speedQuery.rows[0].aviator_speed) {
+        speedSetting = speedQuery.rows[0].aviator_speed;
+      }
+    } catch (_) {}
+    const speedParams = getSpeedCurveParams(speedSetting);
+
     // 1. Fetch active round for this specific app
     let globalQuery = await query(`
       SELECT crash_point, crash_point_2, crash_point_3, created_at,
@@ -79,7 +103,7 @@ export default async function handler(req, res) {
     const elapsedMs = parseFloat(globalRow.elapsed_ms);
 
     // 2. Solve duration limits for the current round
-    const flightDurationLimit = Math.floor(5500 * Math.pow(crashPoint - 1.0, 1 / 1.88));
+    const flightDurationLimit = Math.floor(speedParams.divisor * Math.pow(crashPoint - 1.0, 1 / speedParams.exponent));
     const countdownDuration = 7500;
     const postCrashDuration = 3000;
     const totalRoundDuration = countdownDuration + flightDurationLimit + postCrashDuration;
@@ -170,7 +194,12 @@ export default async function handler(req, res) {
       const interval = setInterval(() => {
         countdownElapsed = Date.now() - globalCreatedAt;
         const remaining = Math.max(0, countdownDuration - countdownElapsed);
-        sendEvent('waiting', { remaining });
+        sendEvent('waiting', { 
+          remaining, 
+          speed: speedParams.speed, 
+          divisor: speedParams.divisor, 
+          exponent: speedParams.exponent 
+        });
 
         if (remaining <= 0) {
           clearInterval(interval);
@@ -194,7 +223,7 @@ export default async function handler(req, res) {
 
   // 2. Flying phase
   const tickInterval = 100;
-  const flightDurationLimit = Math.floor(5500 * Math.pow(crashPoint - 1.0, 1 / 1.88));
+  const flightDurationLimit = Math.floor(speedParams.divisor * Math.pow(crashPoint - 1.0, 1 / speedParams.exponent));
 
   const runFlying = () => {
     return new Promise((resolve) => {
@@ -215,7 +244,7 @@ export default async function handler(req, res) {
           return;
         }
 
-        const currentMult = 1.0 + Math.pow(elapsedFlight / 5500, 1.88);
+        const currentMult = 1.0 + Math.pow(elapsedFlight / speedParams.divisor, speedParams.exponent);
 
         if (currentMult >= crashPoint) {
           clearInterval(interval);
@@ -224,7 +253,13 @@ export default async function handler(req, res) {
           res.end();
           resolve(false);
         } else {
-          sendEvent('tick', { multiplier: currentMult, elapsed: elapsedFlight });
+          sendEvent('tick', { 
+            multiplier: currentMult, 
+            elapsed: elapsedFlight,
+            speed: speedParams.speed,
+            divisor: speedParams.divisor,
+            exponent: speedParams.exponent
+          });
         }
       }, tickInterval);
 

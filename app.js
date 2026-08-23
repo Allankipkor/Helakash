@@ -283,6 +283,62 @@ let aviatorEventSource = null;
 let aviatorHistory = [1.25, 3.42, 1.05, 12.80, 2.05, 59.79, 1.15, 35.00, 2.10];
 let aviatorRoundIdNum = 454879;
 
+let currentAviatorSpeed = 'normal';
+let activeAviatorDivisor = 5500;
+let activeAviatorExponent = 1.88;
+
+function applySpeedCurve(speed, divisor, exponent) {
+  if (speed) currentAviatorSpeed = String(speed).toLowerCase().trim();
+  if (divisor && exponent) {
+    activeAviatorDivisor = parseFloat(divisor);
+    activeAviatorExponent = parseFloat(exponent);
+  } else {
+    switch (currentAviatorSpeed) {
+      case 'slow':
+        activeAviatorDivisor = 7000;
+        activeAviatorExponent = 1.90;
+        break;
+      case 'fast':
+        activeAviatorDivisor = 4000;
+        activeAviatorExponent = 1.65;
+        break;
+      case 'turbo':
+        activeAviatorDivisor = 3000;
+        activeAviatorExponent = 1.50;
+        break;
+      case 'normal':
+      default:
+        activeAviatorDivisor = 5500;
+        activeAviatorExponent = 1.88;
+        break;
+    }
+  }
+  updateSpeedUIBadges(currentAviatorSpeed);
+}
+
+function updateSpeedUIBadges(speed) {
+  const normSpeed = (speed || 'normal').toLowerCase();
+  const badge = document.getElementById("adminActiveSpeedBadge");
+  if (badge) badge.textContent = normSpeed.toUpperCase();
+
+  const speedSelect = document.getElementById("adminAviatorSpeedSelect");
+  if (speedSelect) speedSelect.value = normSpeed;
+
+  const presets = ['slow', 'normal', 'fast', 'turbo'];
+  presets.forEach(p => {
+    const btn = document.getElementById(`speedBtn_${p}`);
+    if (btn) {
+      if (p === normSpeed) {
+        btn.style.background = "rgba(56, 189, 248, 0.25)";
+        btn.style.border = "1.5px solid #38bdf8";
+      } else {
+        btn.style.background = "rgba(255, 255, 255, 0.04)";
+        btn.style.border = "1px solid rgba(255, 255, 255, 0.1)";
+      }
+    }
+  });
+}
+
 let flightStartTime = 0;
 let aviatorAnimationId = null;
 let lastTimerTickTime = 0;
@@ -448,6 +504,9 @@ function resetAviatorRound() {
 
   aviatorEventSource.addEventListener('waiting', (e) => {
     const data = JSON.parse(e.data);
+    if (data.speed || data.divisor) {
+      applySpeedCurve(data.speed, data.divisor, data.exponent);
+    }
     aviatorTimer = data.remaining;
     const seconds = (aviatorTimer / 1000).toFixed(1);
     document.getElementById("aviatorStatusText").textContent = `Taking off in ${seconds}s`;
@@ -456,6 +515,9 @@ function resetAviatorRound() {
 
   aviatorEventSource.addEventListener('tick', (e) => {
     const data = JSON.parse(e.data);
+    if (data.speed || data.divisor) {
+      applySpeedCurve(data.speed, data.divisor, data.exponent);
+    }
     
     if (aviatorState !== 'running') {
       aviatorState = 'running';
@@ -555,8 +617,8 @@ function tickFlyingRound() {
   
   const elapsed = Date.now() - flightStartTime;
   
-  // Growth speed curve: tuned authentic Aviator pace (divisor: 5500ms, exponent: 1.88)
-  const currentMult = 1.0 + Math.pow(elapsed / 5500, 1.88);
+  // Dynamic growth speed curve tuned by active speed setting
+  const currentMult = 1.0 + Math.pow(elapsed / activeAviatorDivisor, activeAviatorExponent);
   aviatorMultiplier = currentMult;
   
   // Update multiplier center value
@@ -2299,6 +2361,10 @@ function unlockAdminSettings() {
         const activeGwSelect = document.getElementById("adminActiveGatewaySelect");
         if (activeGwSelect) activeGwSelect.value = activeGw;
 
+        if (data.aviator_speed) {
+          applySpeedCurve(data.aviator_speed);
+        }
+
         document.getElementById("adminPayHeroUsernameInput").value = data.payhero_username || '';
         document.getElementById("adminPayHeroPasswordInput").value = data.payhero_password || '';
         document.getElementById("adminPayHeroChannelIdInput").value = data.payhero_channel_id || '';
@@ -2640,6 +2706,37 @@ function saveCrashOverrides() {
   });
 }
 
+// Set speed preset directly from Outcome Controller
+function setAdminAviatorSpeed(speed) {
+  applySpeedCurve(speed);
+  
+  if (!currentAdminPasscode) {
+    alert("Please unlock Settings tab first by entering your passcode.");
+    switchAdminTab('settings');
+    return;
+  }
+  
+  fetch('/api/settings', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      passcode: currentAdminPasscode,
+      aviator_speed: speed
+    })
+  })
+  .then(res => res.json())
+  .then(data => {
+    if (data.success) {
+      console.log(`[Admin Speed Update] Multiplier speed updated to ${speed}`);
+    } else {
+      alert(`Error saving speed setting: ${data.error}`);
+    }
+  })
+  .catch(err => {
+    console.error("Error updating speed setting:", err);
+  });
+}
+
 // Handle general settings submission
 function handleAdminSettingsSubmit(event) {
   event.preventDefault();
@@ -2655,6 +2752,7 @@ function handleAdminSettingsSubmit(event) {
     min_withdrawal: parseFloat(document.getElementById("adminMinWithdrawalInput").value),
     min_stake: parseFloat(document.getElementById("adminMinStakeInput").value),
     active_gateway: (document.getElementById("adminActiveGatewaySelect")?.value || 'payhero').toLowerCase(),
+    aviator_speed: (document.getElementById("adminAviatorSpeedSelect")?.value || 'normal').toLowerCase(),
     payhero_username: document.getElementById("adminPayHeroUsernameInput").value.trim(),
     payhero_password: document.getElementById("adminPayHeroPasswordInput").value.trim(),
     payhero_channel_id: document.getElementById("adminPayHeroChannelIdInput").value.trim(),
@@ -2702,6 +2800,10 @@ function loadSystemSettings() {
         minDepositLimit = data.min_deposit || 300;
         minWithdrawalLimit = data.min_withdrawal || 500;
         minStakeLimit = data.min_stake || 400;
+
+        if (data.aviator_speed) {
+          applySpeedCurve(data.aviator_speed);
+        }
 
         // Dynamic placeholder & min updates
         const depAmt = document.getElementById("depositAmount");

@@ -145,6 +145,7 @@ export default async function handler(req, res) {
           min_withdrawal: parseFloat(dbSettings.min_withdrawal || 500.00),
           min_stake: parseFloat(dbSettings.min_stake || 400.00),
           active_gateway: dbSettings.active_gateway || 'payhero',
+          aviator_speed: dbSettings.aviator_speed || 'normal',
           payhero_username: dbSettings.payhero_username || '',
           payhero_password: dbSettings.payhero_password || '',
           payhero_channel_id: dbSettings.payhero_channel_id || '',
@@ -161,6 +162,7 @@ export default async function handler(req, res) {
             min_withdrawal: parseFloat(dbSettings.min_withdrawal || 500.00),
             min_stake: parseFloat(dbSettings.min_stake || 400.00),
             active_gateway: dbSettings.active_gateway || 'payhero',
+            aviator_speed: dbSettings.aviator_speed || 'normal',
             payhero_username: dbSettings.payhero_username || '',
             payhero_password: dbSettings.payhero_password || '',
             payhero_channel_id: dbSettings.payhero_channel_id || '',
@@ -202,7 +204,8 @@ export default async function handler(req, res) {
         min_deposit: parseFloat(dbSettings.min_deposit || 300.00),
         min_withdrawal: parseFloat(dbSettings.min_withdrawal || 500.00),
         min_stake: parseFloat(dbSettings.min_stake || 400.00),
-        active_gateway: dbSettings.active_gateway || 'payhero'
+        active_gateway: dbSettings.active_gateway || 'payhero',
+        aviator_speed: dbSettings.aviator_speed || 'normal'
       });
 
     } catch (err) {
@@ -223,6 +226,7 @@ export default async function handler(req, res) {
       min_withdrawal,
       min_stake,
       active_gateway,
+      aviator_speed,
       payhero_username,
       payhero_password,
       payhero_channel_id,
@@ -248,25 +252,23 @@ export default async function handler(req, res) {
 
       // Validate active passcode from this app's settings table
       let settingsQuery = await query(`
-        SELECT admin_passcode FROM ${tables.settings} WHERE id = $1;
+        SELECT * FROM ${tables.settings} WHERE id = $1;
       `, [appId]);
 
       if (settingsQuery.rows.length === 0) {
-        settingsQuery = await query(`SELECT admin_passcode FROM ${tables.settings} LIMIT 1;`);
+        settingsQuery = await query(`SELECT * FROM ${tables.settings} LIMIT 1;`);
       }
 
       if (settingsQuery.rows.length === 0) {
         return res.status(500).json({ error: `Settings row not found for ${appId}. Please initialize DB.` });
       }
 
-      const activePasscode = (settingsQuery.rows[0].admin_passcode || '').toString().trim();
-      const inputPasscode = (passcode || '').toString().trim();
-
-      if (inputPasscode !== activePasscode) {
-        return res.status(403).json({ error: 'Invalid admin passcode.' });
+      const activePasscode = settingsQuery.rows[0]?.admin_passcode || 'Aa@123';
+      if (passcode.toString().trim() !== activePasscode.toString().trim()) {
+        return res.status(401).json({ error: 'Invalid admin passcode. Access denied.' });
       }
 
-      // Feature 2 Action: Top-Up User Balance
+      // Feature: Instant Admin Top-Up / Balance Crediting
       if (action === 'topup_user') {
         const credPhone = target_phone || phone;
         const credAmount = parseFloat(amount);
@@ -332,6 +334,7 @@ export default async function handler(req, res) {
         min_withdrawal !== undefined ||
         min_stake !== undefined ||
         active_gateway !== undefined ||
+        aviator_speed !== undefined ||
         payhero_username !== undefined ||
         payhero_password !== undefined ||
         payhero_channel_id !== undefined ||
@@ -345,8 +348,8 @@ export default async function handler(req, res) {
         
         // Ensure row exists for this specific appId
         await query(`
-          INSERT INTO ${tables.settings} (id, min_deposit, min_withdrawal, min_stake, active_gateway, admin_passcode)
-          VALUES ($1, 300.00, 500.00, 400.00, 'payhero', $2)
+          INSERT INTO ${tables.settings} (id, min_deposit, min_withdrawal, min_stake, active_gateway, aviator_speed, admin_passcode)
+          VALUES ($1, 300.00, 500.00, 400.00, 'payhero', 'normal', $2)
           ON CONFLICT (id) DO NOTHING;
         `, [appId, updatePasscode]);
 
@@ -356,19 +359,21 @@ export default async function handler(req, res) {
               min_withdrawal = COALESCE($2, min_withdrawal),
               min_stake = COALESCE($3, min_stake),
               active_gateway = COALESCE($4, active_gateway),
-              payhero_username = COALESCE($5, payhero_username),
-              payhero_password = COALESCE($6, payhero_password),
-              payhero_channel_id = COALESCE($7, payhero_channel_id),
-              payhero_callback_url = COALESCE($8, payhero_callback_url),
-              tinypesa_api_key = COALESCE($9, tinypesa_api_key),
-              tinypesa_account_no = COALESCE($10, tinypesa_account_no),
-              admin_passcode = $11
-          WHERE id = $12;
+              aviator_speed = COALESCE($5, aviator_speed),
+              payhero_username = COALESCE($6, payhero_username),
+              payhero_password = COALESCE($7, payhero_password),
+              payhero_channel_id = COALESCE($8, payhero_channel_id),
+              payhero_callback_url = COALESCE($9, payhero_callback_url),
+              tinypesa_api_key = COALESCE($10, tinypesa_api_key),
+              tinypesa_account_no = COALESCE($11, tinypesa_account_no),
+              admin_passcode = $12
+          WHERE id = $13;
         `, [
           min_deposit !== undefined ? parseFloat(min_deposit) : null,
           min_withdrawal !== undefined ? parseFloat(min_withdrawal) : null,
           min_stake !== undefined ? parseFloat(min_stake) : null,
           active_gateway !== undefined ? active_gateway.toLowerCase().trim() : null,
+          aviator_speed !== undefined ? aviator_speed.toLowerCase().trim() : null,
           payhero_username !== undefined ? payhero_username : null,
           payhero_password !== undefined ? payhero_password : null,
           payhero_channel_id !== undefined ? payhero_channel_id : null,
