@@ -555,8 +555,8 @@ function tickFlyingRound() {
   
   const elapsed = Date.now() - flightStartTime;
   
-  // Growth speed curve: slight acceleration (divisor: 7500ms, exponent: 1.2)
-  const currentMult = 1.0 + Math.pow(elapsed / 7500, 1.2);
+  // Growth speed curve: tuned serverless-friendly curve (divisor: 4000ms, exponent: 1.65)
+  const currentMult = 1.0 + Math.pow(elapsed / 4000, 1.65);
   aviatorMultiplier = currentMult;
   
   // Update multiplier center value
@@ -2581,13 +2581,20 @@ function handleAdminTopupSubmit(event) {
   });
 }
 
+// Quick preset outcome override
+function adminQuickOverride(val) {
+  const overrideInput = document.getElementById("overrideCp");
+  if (overrideInput) {
+    overrideInput.value = parseFloat(val).toFixed(2);
+  }
+}
+
 // Force outcomes (Win / Loss next round)
 function forceAdminOutcome(type) {
-  const overrideInput = document.getElementById("overrideCp");
   if (type === 'win') {
-    overrideInput.value = "10.00";
+    adminQuickOverride(10.00);
   } else {
-    overrideInput.value = "1.00";
+    adminQuickOverride(1.00);
   }
 }
 

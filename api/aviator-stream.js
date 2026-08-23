@@ -30,7 +30,7 @@ export default async function handler(req, res) {
     const instantCrash = Math.random() < 0.02; // 2% instant crash
     if (instantCrash) return 1.00;
     let point = Math.max(1.01, 0.98 / Math.random());
-    if (point > 15.00) point = 15.00;
+    if (point > 80.00) point = 80.00;
     return parseFloat(point.toFixed(2));
   }
 
@@ -79,7 +79,7 @@ export default async function handler(req, res) {
     const elapsedMs = parseFloat(globalRow.elapsed_ms);
 
     // 2. Solve duration limits for the current round
-    const flightDurationLimit = Math.floor(7500 * Math.pow(crashPoint - 1.0, 1 / 1.2));
+    const flightDurationLimit = Math.floor(4000 * Math.pow(crashPoint - 1.0, 1 / 1.65));
     const countdownDuration = 7500;
     const postCrashDuration = 3000;
     const totalRoundDuration = countdownDuration + flightDurationLimit + postCrashDuration;
@@ -194,7 +194,7 @@ export default async function handler(req, res) {
 
   // 2. Flying phase
   const tickInterval = 100;
-  const flightDurationLimit = Math.floor(7500 * Math.pow(crashPoint - 1.0, 1 / 1.2));
+  const flightDurationLimit = Math.floor(4000 * Math.pow(crashPoint - 1.0, 1 / 1.65));
 
   const runFlying = () => {
     return new Promise((resolve) => {
@@ -215,7 +215,7 @@ export default async function handler(req, res) {
           return;
         }
 
-        const currentMult = 1.0 + Math.pow(elapsedFlight / 7500, 1.2);
+        const currentMult = 1.0 + Math.pow(elapsedFlight / 4000, 1.65);
 
         if (currentMult >= crashPoint) {
           clearInterval(interval);

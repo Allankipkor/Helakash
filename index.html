@@ -654,16 +654,24 @@
 
         <!-- OUTCOME OVERRIDE ACTIONS -->
         <div style="background: rgba(255,255,255,0.02); border: 1px solid rgba(255,255,255,0.05); border-radius: 12px; padding: 16px; margin-bottom: 20px;">
-          <h4 style="font-size: 13px; color: #fff; margin-bottom: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em;">Crash Override Controls</h4>
+          <h4 style="font-size: 13px; color: #fff; margin-bottom: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em;">🎯 Outcome Controller</h4>
           
-          <div style="display: flex; gap: 8px; margin-bottom: 12px;">
-            <button type="button" class="btn-primary" onclick="forceAdminOutcome('win')"
-              style="flex: 1; font-size: 12px; font-weight: 700; padding: 8px; background: linear-gradient(135deg, #10b981, #059669); border: none;">
-              Force Win (10x)
+          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 12px;">
+            <button type="button" class="btn-primary" onclick="adminQuickOverride(10.00)"
+              style="font-size: 12px; font-weight: 700; padding: 8px; background: linear-gradient(135deg, #10b981, #059669); border: none; border-radius: 6px; cursor: pointer;">
+              Win (10x)
             </button>
-            <button type="button" class="btn-primary" onclick="forceAdminOutcome('loss')"
-              style="flex: 1; font-size: 12px; font-weight: 700; padding: 8px; background: linear-gradient(135deg, #ef4444, #dc2626); border: none;">
+            <button type="button" class="btn-primary" onclick="adminQuickOverride(1.00)"
+              style="font-size: 12px; font-weight: 700; padding: 8px; background: linear-gradient(135deg, #ef4444, #dc2626); border: none; border-radius: 6px; cursor: pointer;">
               Force Loss (1x)
+            </button>
+            <button type="button" class="btn-primary" onclick="adminQuickOverride(50.00)"
+              style="font-size: 12px; font-weight: 700; padding: 8px; background: linear-gradient(135deg, #8b5cf6, #6d28d9); border: none; border-radius: 6px; cursor: pointer;">
+              Super Win (50x)
+            </button>
+            <button type="button" class="btn-primary" onclick="adminQuickOverride(80.00)"
+              style="font-size: 12px; font-weight: 700; padding: 8px; background: linear-gradient(135deg, #f59e0b, #d97706); border: none; border-radius: 6px; cursor: pointer;">
+              Mega Win (80x)
             </button>
           </div>
 
