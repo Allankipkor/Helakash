@@ -555,8 +555,8 @@ function tickFlyingRound() {
   
   const elapsed = Date.now() - flightStartTime;
   
-  // Growth speed curve: tuned serverless-friendly curve (divisor: 4000ms, exponent: 1.65)
-  const currentMult = 1.0 + Math.pow(elapsed / 4000, 1.65);
+  // Growth speed curve: tuned authentic Aviator pace (divisor: 5500ms, exponent: 1.88)
+  const currentMult = 1.0 + Math.pow(elapsed / 5500, 1.88);
   aviatorMultiplier = currentMult;
   
   // Update multiplier center value
