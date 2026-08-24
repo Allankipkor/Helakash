@@ -50,6 +50,7 @@ export default async function handler(req, res) {
 
   let crashPoint, crashPoint2, crashPoint3, globalCreatedAt;
   let speedSetting = 'normal';
+  let speedParams = getSpeedCurveParams('normal');
   
   try {
     // 0. Fetch speed setting for this app
@@ -59,7 +60,7 @@ export default async function handler(req, res) {
         speedSetting = speedQuery.rows[0].aviator_speed;
       }
     } catch (_) {}
-    const speedParams = getSpeedCurveParams(speedSetting);
+    speedParams = getSpeedCurveParams(speedSetting);
 
     // 1. Fetch active round for this specific app
     let globalQuery = await query(`

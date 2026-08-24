@@ -474,6 +474,7 @@ function resetAviatorRound() {
   document.getElementById("aviatorStatusText").style.color = "var(--text-gray)";
   document.getElementById("aviatorMultiplierVal").textContent = "1.00";
   document.getElementById("aviatorMultiplierVal").style.color = "#fff";
+  drawAviatorWaitingState();
   
   // Reset Console A Button
   resetConsoleUI('A', activeBetA, betAmountA);
@@ -555,6 +556,15 @@ function resetAviatorRound() {
 
   aviatorEventSource.onerror = (err) => {
     console.error("Aviator stream error:", err);
+    if (aviatorEventSource) {
+      aviatorEventSource.close();
+      aviatorEventSource = null;
+    }
+    setTimeout(() => {
+      if (!aviatorEventSource && aviatorState !== 'running') {
+        resetAviatorRound();
+      }
+    }, 2000);
   };
 }
 
