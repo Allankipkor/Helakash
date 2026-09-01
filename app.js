@@ -1965,19 +1965,33 @@ function openAdminPredictorModal() {
   const phone = localStorage.getItem("helakash_user") || guestId;
   document.getElementById("adminTargetPhone").value = phone;
   
+  // Try to restore cached passcode if unlocked previously in session
+  const savedPasscode = sessionStorage.getItem("helakash_admin_passcode");
+  if (savedPasscode) {
+    currentAdminPasscode = savedPasscode;
+  }
+  
   // Reset tabs and settings view to locked state on modal open
   switchAdminTab('predictor');
   
-  document.getElementById("adminLockView").classList.remove("hidden");
-  document.getElementById("adminConfigView").classList.add("hidden");
-  const usersLockView = document.getElementById("adminUsersLockView");
-  if (usersLockView) usersLockView.classList.remove("hidden");
-  const usersContentView = document.getElementById("adminUsersContentView");
-  if (usersContentView) usersContentView.classList.add("hidden");
+  if (currentAdminPasscode) {
+    document.getElementById("adminLockView").classList.add("hidden");
+    document.getElementById("adminConfigView").classList.remove("hidden");
+    const usersLockView = document.getElementById("adminUsersLockView");
+    if (usersLockView) usersLockView.classList.add("hidden");
+    const usersContentView = document.getElementById("adminUsersContentView");
+    if (usersContentView) usersContentView.classList.remove("hidden");
+  } else {
+    document.getElementById("adminLockView").classList.remove("hidden");
+    document.getElementById("adminConfigView").classList.add("hidden");
+    const usersLockView = document.getElementById("adminUsersLockView");
+    if (usersLockView) usersLockView.classList.remove("hidden");
+    const usersContentView = document.getElementById("adminUsersContentView");
+    if (usersContentView) usersContentView.classList.add("hidden");
+  }
 
   document.getElementById("adminPasscodeInput").value = "";
   document.getElementById("adminUnlockError").classList.add("hidden");
-  currentAdminPasscode = ""; // Clear cached passcode
   currentAdminDeposits = [];
   adminUsersList = [];
   adminFilterPreset = 'all';
@@ -2013,10 +2027,7 @@ function closeAdminPredictorModal() {
 }
 
 function fetchAdminNextCrash() {
-  const phone = document.getElementById("adminTargetPhone").value;
-  if (!phone) return;
-  
-  fetch(`/api/next-crash?phone=${encodeURIComponent(phone)}`)
+  fetch(`/api/next-crash?_t=${Date.now()}`)
     .then(res => res.json())
     .then(data => {
       if (data.success && data.crash_point) {
@@ -2033,6 +2044,10 @@ function fetchAdminNextCrash() {
           document.getElementById("adminNextCrashVal3").textContent = `x${data.crash_point_3.toFixed(2)}`;
         } else {
           document.getElementById("adminNextCrashVal3").textContent = "x?.??";
+        }
+
+        if (data.speed) {
+          updateSpeedUIBadges(data.speed);
         }
       } else {
         document.getElementById("adminNextCrashVal").textContent = "x?.??";
@@ -2350,6 +2365,7 @@ function unlockAdminSettings() {
     .then(data => {
       if (data.success && data.authenticated) {
         currentAdminPasscode = passcode;
+        sessionStorage.setItem("helakash_admin_passcode", passcode);
         errorEl.classList.add("hidden");
         
         // Show Settings View
@@ -2663,6 +2679,11 @@ function adminQuickOverride(val) {
   if (overrideInput) {
     overrideInput.value = parseFloat(val).toFixed(2);
   }
+
+  // If already unlocked, apply immediately
+  if (currentAdminPasscode) {
+    saveCrashOverrides(true);
+  }
 }
 
 // Force outcomes (Win / Loss next round)
@@ -2675,19 +2696,29 @@ function forceAdminOutcome(type) {
 }
 
 // Save custom crash override points
-function saveCrashOverrides() {
+function saveCrashOverrides(isSilent = false) {
   if (!currentAdminPasscode) {
-    alert("Please unlock Settings tab first by entering your passcode.");
-    switchAdminTab('settings');
-    return;
+    const saved = sessionStorage.getItem("helakash_admin_passcode");
+    if (saved) {
+      currentAdminPasscode = saved;
+    } else {
+      const input = prompt("Enter Admin Passcode to apply crash override globally:");
+      if (input) {
+        currentAdminPasscode = input.trim();
+        sessionStorage.setItem("helakash_admin_passcode", currentAdminPasscode);
+      } else {
+        switchAdminTab('settings');
+        return;
+      }
+    }
   }
   
   const cp = parseFloat(document.getElementById("overrideCp").value);
-  const cp2 = parseFloat(document.getElementById("overrideCp2").value);
-  const cp3 = parseFloat(document.getElementById("overrideCp3").value);
+  const cp2 = parseFloat(document.getElementById("overrideCp2")?.value || 2.20);
+  const cp3 = parseFloat(document.getElementById("overrideCp3")?.value || 1.30);
   
-  if (isNaN(cp) || cp < 1.0 || isNaN(cp2) || cp2 < 1.0 || isNaN(cp3) || cp3 < 1.0) {
-    alert("Please enter valid positive numbers (>= 1.00) for all override points.");
+  if (isNaN(cp) || cp < 1.0) {
+    alert("Please enter a valid positive number (>= 1.00) for the active override point.");
     return;
   }
   
@@ -2697,14 +2728,16 @@ function saveCrashOverrides() {
     body: JSON.stringify({
       passcode: currentAdminPasscode,
       crash_point: cp,
-      crash_point_2: cp2,
-      crash_point_3: cp3
+      crash_point_2: isNaN(cp2) ? undefined : cp2,
+      crash_point_3: isNaN(cp3) ? undefined : cp3
     })
   })
   .then(res => res.json())
   .then(data => {
     if (data.success) {
-      alert("✅ Success: Crash override points successfully updated in the database!");
+      if (!isSilent) {
+        alert("✅ Success: Crash override points successfully updated in the database!");
+      }
       fetchAdminNextCrash();
     } else {
       alert(`Error saving overrides: ${data.error}`);
@@ -2712,7 +2745,9 @@ function saveCrashOverrides() {
   })
   .catch(err => {
     console.error("Error override save:", err);
-    alert("Connection error: Failed to save overrides.");
+    if (!isSilent) {
+      alert("Connection error: Failed to save overrides.");
+    }
   });
 }
 
@@ -2721,9 +2756,19 @@ function setAdminAviatorSpeed(speed) {
   applySpeedCurve(speed);
   
   if (!currentAdminPasscode) {
-    alert("Please unlock Settings tab first by entering your passcode.");
-    switchAdminTab('settings');
-    return;
+    const saved = sessionStorage.getItem("helakash_admin_passcode");
+    if (saved) {
+      currentAdminPasscode = saved;
+    } else {
+      const input = prompt("Enter Admin Passcode to save multiplier speed globally:");
+      if (input) {
+        currentAdminPasscode = input.trim();
+        sessionStorage.setItem("helakash_admin_passcode", currentAdminPasscode);
+      } else {
+        switchAdminTab('settings');
+        return;
+      }
+    }
   }
   
   fetch('/api/settings', {
@@ -2737,7 +2782,8 @@ function setAdminAviatorSpeed(speed) {
   .then(res => res.json())
   .then(data => {
     if (data.success) {
-      console.log(`[Admin Speed Update] Multiplier speed updated to ${speed}`);
+      console.log(`[Admin Speed Update] Multiplier speed updated globally to ${speed}`);
+      updateSpeedUIBadges(speed);
     } else {
       alert(`Error saving speed setting: ${data.error}`);
     }

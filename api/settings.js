@@ -1,4 +1,4 @@
-import { query, getAppId, getTables, initAppDatabase, normalizePhoneVariants, findUserOrImport, ensureUser } from './db.js';
+import { query, getAppId, getTables, initAppDatabase, normalizePhoneVariants, findUserOrImport, ensureUser, getOrAdvanceGlobalActiveRound } from './db.js';
 
 export default async function handler(req, res) {
   const appId = getAppId(req);
@@ -31,7 +31,8 @@ export default async function handler(req, res) {
           app_id: appId,
           min_deposit: 300.00,
           min_withdrawal: 500.00,
-          min_stake: 400.00
+          min_stake: 400.00,
+          aviator_speed: 'normal'
         });
       }
 
@@ -41,16 +42,8 @@ export default async function handler(req, res) {
 
       // If correct passcode is supplied, return full credentials, predictor, deposits with stats, and users directory
       if (inputPasscode && inputPasscode === dbPasscode) {
-        // Fetch active round crash points for this specific app
-        let activeRoundQuery = await query(`
-          SELECT crash_point, crash_point_2, crash_point_3 FROM ${tables.active_rounds} WHERE phone = $1;
-        `, [appId]);
-
-        if (activeRoundQuery.rows.length === 0) {
-          activeRoundQuery = await query(`SELECT crash_point, crash_point_2, crash_point_3 FROM ${tables.active_rounds} LIMIT 1;`);
-        }
-
-        const activeRound = activeRoundQuery.rows[0] || { crash_point: 1.50, crash_point_2: 2.20, crash_point_3: 1.30 };
+        // Fetch active round crash points using global engine
+        const activeRound = await getOrAdvanceGlobalActiveRound(appId, tables);
 
         // 1. Build dynamic filter for successful deposits
         let depositWhere = `(LOWER(type) = 'deposit' OR LOWER(type) = 'mpesa deposit' OR LOWER(type) = 'admin deposit' OR LOWER(type) LIKE '%deposit%') AND LOWER(status) = 'success'`;
@@ -153,9 +146,9 @@ export default async function handler(req, res) {
           tinypesa_api_key: dbSettings.tinypesa_api_key || '',
           tinypesa_account_no: dbSettings.tinypesa_account_no || '',
           admin_passcode: dbSettings.admin_passcode,
-          crash_point: parseFloat(activeRound.crash_point || 1.50),
-          crash_point_2: parseFloat(activeRound.crash_point_2 || 2.20),
-          crash_point_3: parseFloat(activeRound.crash_point_3 || 1.30),
+          crash_point: activeRound.crashPoint,
+          crash_point_2: activeRound.crashPoint2,
+          crash_point_3: activeRound.crashPoint3,
           // Structured nested properties
           settings: {
             min_deposit: parseFloat(dbSettings.min_deposit || 300.00),
@@ -172,9 +165,11 @@ export default async function handler(req, res) {
             admin_passcode: dbSettings.admin_passcode
           },
           predictor: {
-            crash_point: parseFloat(activeRound.crash_point || 1.50),
-            crash_point_2: parseFloat(activeRound.crash_point_2 || 2.20),
-            crash_point_3: parseFloat(activeRound.crash_point_3 || 1.30)
+            crash_point: activeRound.crashPoint,
+            crash_point_2: activeRound.crashPoint2,
+            crash_point_3: activeRound.crashPoint3,
+            phase: activeRound.phase,
+            speed: activeRound.speedSetting
           },
           deposits: depositsQuery.rows.map(row => ({
             phone: row.phone,
@@ -398,8 +393,7 @@ export default async function handler(req, res) {
           SET crash_point = COALESCE($2, ${tables.active_rounds}.crash_point),
               crash_point_2 = COALESCE($3, ${tables.active_rounds}.crash_point_2),
               crash_point_3 = COALESCE($4, ${tables.active_rounds}.crash_point_3),
-              status = 'ACTIVE',
-              created_at = NOW();
+              status = 'ACTIVE';
         `, [appId, cp1, cp2, cp3]);
       }
 

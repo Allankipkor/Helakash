@@ -1,22 +1,8 @@
-import { query, getAppId, getTables } from './db.js';
+import { getAppId, getTables, getOrAdvanceGlobalActiveRound } from './db.js';
 
 export const config = {
   maxDuration: 60, // Maximum execution duration for Vercel functions (60s on Hobby tier)
 };
-
-export function getSpeedCurveParams(speed) {
-  switch (String(speed || '').toLowerCase().trim()) {
-    case 'slow':
-      return { speed: 'slow', divisor: 7000, exponent: 1.90 };
-    case 'fast':
-      return { speed: 'fast', divisor: 4000, exponent: 1.65 };
-    case 'turbo':
-      return { speed: 'turbo', divisor: 3000, exponent: 1.50 };
-    case 'normal':
-    default:
-      return { speed: 'normal', divisor: 5500, exponent: 1.88 };
-  }
-}
 
 export default async function handler(req, res) {
   const appId = getAppId(req);
@@ -28,144 +14,6 @@ export default async function handler(req, res) {
 
   const phone = req.query.phone || `guest_${Math.random().toString(36).substring(2, 9)}`;
 
-  // Normalise phone number format
-  let cleanPhone = phone;
-  if (!phone.startsWith('guest_')) {
-    cleanPhone = phone.replace(/\D/g, '');
-    if (cleanPhone.startsWith('0')) {
-      cleanPhone = '254' + cleanPhone.substring(1);
-    } else if (cleanPhone.startsWith('7') || cleanPhone.startsWith('1')) {
-      cleanPhone = '254' + cleanPhone;
-    }
-  }
-
-  // Helper function to generate crash point securely
-  function generateCrashPoint() {
-    const instantCrash = Math.random() < 0.02; // 2% instant crash
-    if (instantCrash) return 1.00;
-    let point = Math.max(1.01, 0.98 / Math.random());
-    if (point > 80.00) point = 80.00;
-    return parseFloat(point.toFixed(2));
-  }
-
-  let crashPoint, crashPoint2, crashPoint3, globalCreatedAt;
-  let speedSetting = 'normal';
-  let speedParams = getSpeedCurveParams('normal');
-  
-  try {
-    // 0. Fetch speed setting for this app
-    try {
-      const speedQuery = await query(`SELECT aviator_speed FROM ${tables.settings} WHERE id = $1;`, [appId]);
-      if (speedQuery.rows.length > 0 && speedQuery.rows[0].aviator_speed) {
-        speedSetting = speedQuery.rows[0].aviator_speed;
-      }
-    } catch (_) {}
-    speedParams = getSpeedCurveParams(speedSetting);
-
-    // 1. Fetch active round for this specific app
-    let globalQuery = await query(`
-      SELECT crash_point, crash_point_2, crash_point_3, created_at,
-             EXTRACT(EPOCH FROM (NOW() - created_at)) * 1000 AS elapsed_ms
-      FROM ${tables.active_rounds} 
-      WHERE phone = $1;
-    `, [appId]);
-
-    if (globalQuery.rows.length === 0) {
-      globalQuery = await query(`
-        SELECT crash_point, crash_point_2, crash_point_3, created_at,
-               EXTRACT(EPOCH FROM (NOW() - created_at)) * 1000 AS elapsed_ms
-        FROM ${tables.active_rounds} 
-        LIMIT 1;
-      `);
-    }
-
-    if (globalQuery.rows.length === 0) {
-      // Create initial round if missing
-      crashPoint = generateCrashPoint();
-      crashPoint2 = generateCrashPoint();
-      crashPoint3 = generateCrashPoint();
-      await query(`
-        INSERT INTO ${tables.active_rounds} (phone, crash_point, crash_point_2, crash_point_3, status, created_at)
-        VALUES ($1, $2, $3, $4, 'ACTIVE', NOW());
-      `, [appId, crashPoint, crashPoint2, crashPoint3]);
-
-      globalQuery = await query(`
-        SELECT crash_point, crash_point_2, crash_point_3, created_at,
-               EXTRACT(EPOCH FROM (NOW() - created_at)) * 1000 AS elapsed_ms
-        FROM ${tables.active_rounds} 
-        WHERE phone = $1;
-      `, [appId]);
-    }
-
-    let globalRow = globalQuery.rows[0];
-    crashPoint = parseFloat(globalRow.crash_point);
-    crashPoint2 = parseFloat(globalRow.crash_point_2);
-    crashPoint3 = parseFloat(globalRow.crash_point_3);
-    const elapsedMs = parseFloat(globalRow.elapsed_ms);
-
-    // 2. Solve duration limits for the current round
-    const flightDurationLimit = Math.floor(speedParams.divisor * Math.pow(crashPoint - 1.0, 1 / speedParams.exponent));
-    const countdownDuration = 7500;
-    const postCrashDuration = 3000;
-    const totalRoundDuration = countdownDuration + flightDurationLimit + postCrashDuration;
-
-    let elapsedTotal = elapsedMs;
-
-    // 3. Shift the round if it has expired
-    if (elapsedTotal >= totalRoundDuration) {
-      const nextCp = generateCrashPoint();
-      await query(`
-        UPDATE ${tables.active_rounds}
-        SET crash_point = crash_point_2,
-            crash_point_2 = crash_point_3,
-            crash_point_3 = $1,
-            status = 'ACTIVE',
-            created_at = NOW()
-        WHERE phone = $2
-          AND EXTRACT(EPOCH FROM (NOW() - created_at)) * 1000 >= $3;
-      `, [nextCp, appId, totalRoundDuration]);
-
-      // Re-read updated round parameters
-      const reQuery = await query(`
-        SELECT crash_point, crash_point_2, crash_point_3, created_at,
-               EXTRACT(EPOCH FROM (NOW() - created_at)) * 1000 AS elapsed_ms
-        FROM ${tables.active_rounds} 
-        WHERE phone = $1
-        ORDER BY created_at DESC
-        LIMIT 1;
-      `, [appId]);
-
-      globalRow = reQuery.rows[0];
-      crashPoint = parseFloat(globalRow.crash_point);
-      crashPoint2 = parseFloat(globalRow.crash_point_2);
-      crashPoint3 = parseFloat(globalRow.crash_point_3);
-      globalCreatedAt = Date.now() - parseFloat(globalRow.elapsed_ms);
-    } else {
-      globalCreatedAt = Date.now() - elapsedTotal;
-    }
-
-    // 4. Align individual user active round status in database
-    await query(`
-      INSERT INTO ${tables.active_rounds} (phone, crash_point, crash_point_2, crash_point_3, status, created_at)
-      VALUES ($1, $2, $3, $4, 'ACTIVE', $5)
-      ON CONFLICT (phone) DO UPDATE 
-      SET crash_point = $2,
-          crash_point_2 = $3,
-          crash_point_3 = $4,
-          status = 'ACTIVE',
-          created_at = $5;
-    `, [cleanPhone, crashPoint, crashPoint2, crashPoint3, globalRow.created_at]);
-
-  } catch (dbError) {
-    console.error("DB error in aviator-stream initialization:", dbError);
-    crashPoint = generateCrashPoint();
-    crashPoint2 = generateCrashPoint();
-    crashPoint3 = generateCrashPoint();
-    globalCreatedAt = Date.now();
-  }
-
-  console.log(`Starting secure synchronized Aviator stream for ${cleanPhone} on ${appId}. Crash limit: ${crashPoint.toFixed(2)}`);
-
   // Set SSE Headers
   res.writeHead(200, {
     'Content-Type': 'text/event-stream',
@@ -175,118 +23,135 @@ export default async function handler(req, res) {
   });
 
   const sendEvent = (event, data) => {
-    res.write(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`);
-    if (res.flush) res.flush();
+    try {
+      res.write(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`);
+      if (res.flush) res.flush();
+    } catch (_) {}
   };
 
-  // 1. Waiting / Takeoff countdown phase (7500ms)
-  const countdownDuration = 7500;
-  const countdownInterval = 100;
-  
-  let countdownElapsed = Math.max(0, Date.now() - globalCreatedAt);
+  let isClosed = false;
+  req.on('close', () => {
+    isClosed = true;
+  });
 
-  const runWaiting = () => {
-    return new Promise((resolve) => {
-      if (countdownElapsed >= countdownDuration) {
-        resolve(false);
-        return;
-      }
+  try {
+    // 1. Fetch current authoritative global round state
+    const roundState = await getOrAdvanceGlobalActiveRound(appId, tables);
+    const {
+      crashPoint,
+      speedParams,
+      flightDurationLimit,
+      countdownDuration,
+      createdAt
+    } = roundState;
 
-      const interval = setInterval(() => {
-        countdownElapsed = Date.now() - globalCreatedAt;
-        const remaining = Math.max(0, countdownDuration - countdownElapsed);
-        sendEvent('waiting', { 
-          remaining, 
-          speed: speedParams.speed, 
-          divisor: speedParams.divisor, 
-          exponent: speedParams.exponent 
-        });
+    const globalCreatedAtMs = new Date(createdAt).getTime();
 
-        if (remaining <= 0) {
-          clearInterval(interval);
-          resolve(false);
-        }
-      }, countdownInterval);
+    // If client connects while already in 'crashed' phase, send crash and close so they reconnect for new round
+    if (roundState.phase === 'crashed') {
+      sendEvent('crashed', { multiplier: crashPoint });
+      setTimeout(() => {
+        if (!isClosed) res.end();
+      }, Math.max(200, roundState.remainingMs));
+      return;
+    }
 
-      req.on('close', () => {
-        clearInterval(interval);
-        resolve(true); // cancelled
-      });
-    });
-  };
-
-  const wasCancelled = await runWaiting();
-  if (wasCancelled) {
-    await cleanUpRound(cleanPhone, tables);
-    res.end();
-    return;
-  }
-
-  // 2. Flying phase
-  const tickInterval = 100;
-  const flightDurationLimit = Math.floor(speedParams.divisor * Math.pow(crashPoint - 1.0, 1 / speedParams.exponent));
-
-  const runFlying = () => {
-    return new Promise((resolve) => {
-      const interval = setInterval(async () => {
+    // 2. Waiting / Takeoff countdown phase (7500ms)
+    const runWaiting = () => {
+      return new Promise((resolve) => {
         const now = Date.now();
-        const elapsedFlight = now - (globalCreatedAt + countdownDuration);
+        const countdownElapsed = Math.max(0, now - globalCreatedAtMs);
 
-        if (elapsedFlight >= flightDurationLimit) {
-          clearInterval(interval);
-          sendEvent('crashed', { multiplier: crashPoint });
-          await cleanUpRound(cleanPhone, tables);
-          res.end();
+        if (countdownElapsed >= countdownDuration) {
           resolve(false);
           return;
         }
 
-        if (elapsedFlight <= 0) {
-          return;
-        }
+        const interval = setInterval(() => {
+          if (isClosed) {
+            clearInterval(interval);
+            resolve(true);
+            return;
+          }
 
-        const currentMult = 1.0 + Math.pow(elapsedFlight / speedParams.divisor, speedParams.exponent);
+          const currentNow = Date.now();
+          const elapsed = currentNow - globalCreatedAtMs;
+          const remaining = Math.max(0, countdownDuration - elapsed);
 
-        if (currentMult >= crashPoint) {
-          clearInterval(interval);
-          sendEvent('crashed', { multiplier: crashPoint });
-          await cleanUpRound(cleanPhone, tables);
-          res.end();
-          resolve(false);
-        } else {
-          sendEvent('tick', { 
-            multiplier: currentMult, 
-            elapsed: elapsedFlight,
+          sendEvent('waiting', {
+            remaining,
             speed: speedParams.speed,
             divisor: speedParams.divisor,
             exponent: speedParams.exponent
           });
-        }
-      }, tickInterval);
 
-      req.on('close', () => {
-        clearInterval(interval);
-        resolve(true); // cancelled
+          if (remaining <= 0) {
+            clearInterval(interval);
+            resolve(false);
+          }
+        }, 100);
       });
-    });
-  };
+    };
 
-  const flightCancelled = await runFlying();
-  if (flightCancelled) {
-    await cleanUpRound(cleanPhone, tables);
-    res.end();
-  }
-}
+    const wasCancelled = await runWaiting();
+    if (wasCancelled || isClosed) {
+      if (!isClosed) res.end();
+      return;
+    }
 
-async function cleanUpRound(phone, tables) {
-  try {
-    await query(`
-      UPDATE ${tables.active_rounds} 
-      SET status = 'CRASHED' 
-      WHERE phone = $1;
-    `, [phone]);
-    console.log(`Marked active round as CRASHED for ${phone}`);
-  } catch (error) {
-    console.error("DB update error in stream cleanup:", error);
+    // 3. Flying phase
+    const runFlying = () => {
+      return new Promise((resolve) => {
+        const interval = setInterval(() => {
+          if (isClosed) {
+            clearInterval(interval);
+            resolve(true);
+            return;
+          }
+
+          const now = Date.now();
+          const elapsedFlight = now - (globalCreatedAtMs + countdownDuration);
+
+          if (elapsedFlight <= 0) {
+            return;
+          }
+
+          if (elapsedFlight >= flightDurationLimit) {
+            clearInterval(interval);
+            sendEvent('crashed', { multiplier: crashPoint });
+            setTimeout(() => {
+              if (!isClosed) res.end();
+            }, 500);
+            resolve(false);
+            return;
+          }
+
+          const currentMult = 1.0 + Math.pow(elapsedFlight / speedParams.divisor, speedParams.exponent);
+
+          if (currentMult >= crashPoint) {
+            clearInterval(interval);
+            sendEvent('crashed', { multiplier: crashPoint });
+            setTimeout(() => {
+              if (!isClosed) res.end();
+            }, 500);
+            resolve(false);
+          } else {
+            sendEvent('tick', {
+              multiplier: parseFloat(currentMult.toFixed(2)),
+              elapsed: elapsedFlight,
+              speed: speedParams.speed,
+              divisor: speedParams.divisor,
+              exponent: speedParams.exponent
+            });
+          }
+        }, 100);
+      });
+    };
+
+    await runFlying();
+
+  } catch (err) {
+    console.error("Aviator stream error:", err.message);
+    if (!isClosed) res.end();
   }
 }

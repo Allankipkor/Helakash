@@ -334,8 +334,8 @@ export async function initAppDatabase(req) {
 
   // Seed default settings row for this APP_ID
   await query(`
-    INSERT INTO ${tables.settings} (id, min_deposit, min_withdrawal, min_stake, active_gateway, admin_passcode)
-    VALUES ($1, 300.00, 500.00, 400.00, 'payhero', 'Aa@123')
+    INSERT INTO ${tables.settings} (id, min_deposit, min_withdrawal, min_stake, active_gateway, aviator_speed, admin_passcode)
+    VALUES ($1, 300.00, 500.00, 400.00, 'payhero', 'normal', 'Aa@123')
     ON CONFLICT (id) DO NOTHING;
   `, [appId]);
 
@@ -343,5 +343,160 @@ export async function initAppDatabase(req) {
     success: true,
     appId: appId,
     tables: tables
+  };
+}
+
+/**
+ * Get curve divisor and exponent for a speed preset
+ */
+export function getSpeedCurveParams(speed) {
+  switch (String(speed || '').toLowerCase().trim()) {
+    case 'slow':
+      return { speed: 'slow', divisor: 7000, exponent: 1.90 };
+    case 'fast':
+      return { speed: 'fast', divisor: 4000, exponent: 1.65 };
+    case 'turbo':
+      return { speed: 'turbo', divisor: 3000, exponent: 1.50 };
+    case 'normal':
+    default:
+      return { speed: 'normal', divisor: 5500, exponent: 1.88 };
+  }
+}
+
+/**
+ * Generates a realistic Aviator crash point multiplier
+ */
+export function generateCrashPoint() {
+  const instantCrash = Math.random() < 0.02; // 2% instant crash
+  if (instantCrash) return 1.00;
+  let point = Math.max(1.01, 0.98 / Math.random());
+  if (point > 80.00) point = 80.00;
+  return parseFloat(point.toFixed(2));
+}
+
+/**
+ * Authoritative global active round reader & state engine.
+ * Ensures ALL connected devices, game streams, and predictor instances share the EXACT same round state.
+ */
+export async function getOrAdvanceGlobalActiveRound(appId, tables) {
+  // 1. Fetch current speed setting for this app
+  let speedSetting = 'normal';
+  try {
+    const speedQuery = await query(`SELECT aviator_speed FROM ${tables.settings} WHERE id = $1;`, [appId]);
+    if (speedQuery.rows.length > 0 && speedQuery.rows[0].aviator_speed) {
+      speedSetting = speedQuery.rows[0].aviator_speed;
+    }
+  } catch (_) {}
+  const speedParams = getSpeedCurveParams(speedSetting);
+
+  // 2. Fetch master active round record for appId
+  let globalQuery = await query(`
+    SELECT crash_point, crash_point_2, crash_point_3, created_at,
+           EXTRACT(EPOCH FROM (NOW() - created_at)) * 1000 AS elapsed_ms
+    FROM ${tables.active_rounds} 
+    WHERE phone = $1;
+  `, [appId]);
+
+  if (globalQuery.rows.length === 0) {
+    const cp1 = generateCrashPoint();
+    const cp2 = generateCrashPoint();
+    const cp3 = generateCrashPoint();
+    await query(`
+      INSERT INTO ${tables.active_rounds} (phone, crash_point, crash_point_2, crash_point_3, status, created_at)
+      VALUES ($1, $2, $3, $4, 'ACTIVE', NOW())
+      ON CONFLICT (phone) DO NOTHING;
+    `, [appId, cp1, cp2, cp3]);
+
+    globalQuery = await query(`
+      SELECT crash_point, crash_point_2, crash_point_3, created_at,
+             EXTRACT(EPOCH FROM (NOW() - created_at)) * 1000 AS elapsed_ms
+      FROM ${tables.active_rounds} 
+      WHERE phone = $1;
+    `, [appId]);
+  }
+
+  let row = globalQuery.rows[0] || { crash_point: 1.50, crash_point_2: 2.20, crash_point_3: 1.30, elapsed_ms: 0, created_at: new Date() };
+  let crashPoint = parseFloat(row.crash_point || 1.50);
+  let crashPoint2 = parseFloat(row.crash_point_2 || 2.20);
+  let crashPoint3 = parseFloat(row.crash_point_3 || 1.30);
+  let elapsedMs = Math.max(0, parseFloat(row.elapsed_ms || 0));
+
+  const countdownDuration = 7500;
+  const postCrashDuration = 3000;
+  let flightDurationLimit = Math.floor(speedParams.divisor * Math.pow(Math.max(0.01, crashPoint - 1.0), 1 / speedParams.exponent));
+  let totalRoundDuration = countdownDuration + flightDurationLimit + postCrashDuration;
+
+  // 3. Shift round if current round duration has elapsed
+  if (elapsedMs >= totalRoundDuration) {
+    const nextCp = generateCrashPoint();
+    await query(`
+      UPDATE ${tables.active_rounds}
+      SET crash_point = crash_point_2,
+          crash_point_2 = crash_point_3,
+          crash_point_3 = $1,
+          status = 'ACTIVE',
+          created_at = NOW()
+      WHERE phone = $2
+        AND EXTRACT(EPOCH FROM (NOW() - created_at)) * 1000 >= $3;
+    `, [nextCp, appId, totalRoundDuration]);
+
+    // Re-fetch updated active round
+    const reQuery = await query(`
+      SELECT crash_point, crash_point_2, crash_point_3, created_at,
+             EXTRACT(EPOCH FROM (NOW() - created_at)) * 1000 AS elapsed_ms
+      FROM ${tables.active_rounds} 
+      WHERE phone = $1;
+    `, [appId]);
+
+    if (reQuery.rows.length > 0) {
+      row = reQuery.rows[0];
+      crashPoint = parseFloat(row.crash_point || 1.50);
+      crashPoint2 = parseFloat(row.crash_point_2 || 2.20);
+      crashPoint3 = parseFloat(row.crash_point_3 || 1.30);
+      elapsedMs = Math.max(0, parseFloat(row.elapsed_ms || 0));
+      flightDurationLimit = Math.floor(speedParams.divisor * Math.pow(Math.max(0.01, crashPoint - 1.0), 1 / speedParams.exponent));
+      totalRoundDuration = countdownDuration + flightDurationLimit + postCrashDuration;
+    }
+  }
+
+  // 4. Calculate Phase and Multiplier
+  let phase = 'waiting';
+  let remainingMs = 0;
+  let elapsedFlight = 0;
+  let currentMultiplier = 1.00;
+
+  if (elapsedMs < countdownDuration) {
+    phase = 'waiting';
+    remainingMs = Math.max(0, countdownDuration - elapsedMs);
+  } else if (elapsedMs < countdownDuration + flightDurationLimit) {
+    phase = 'flying';
+    elapsedFlight = elapsedMs - countdownDuration;
+    currentMultiplier = parseFloat((1.0 + Math.pow(elapsedFlight / speedParams.divisor, speedParams.exponent)).toFixed(2));
+    if (currentMultiplier >= crashPoint) currentMultiplier = crashPoint;
+    remainingMs = Math.max(0, (countdownDuration + flightDurationLimit) - elapsedMs);
+  } else {
+    phase = 'crashed';
+    elapsedFlight = flightDurationLimit;
+    currentMultiplier = crashPoint;
+    remainingMs = Math.max(0, totalRoundDuration - elapsedMs);
+  }
+
+  return {
+    appId,
+    crashPoint,
+    crashPoint2,
+    crashPoint3,
+    speedSetting,
+    speedParams,
+    flightDurationLimit,
+    countdownDuration,
+    postCrashDuration,
+    totalRoundDuration,
+    elapsedMs,
+    createdAt: row.created_at,
+    phase,
+    remainingMs,
+    elapsedFlight,
+    currentMultiplier
   };
 }
