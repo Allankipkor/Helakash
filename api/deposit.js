@@ -138,7 +138,8 @@ export default async function handler(req, res) {
   if (req.body.simulated || missingCredentials) {
     console.log(`Running deposit in SIMULATED mode (Gateway: ${activeGateway}).`);
 
-    const reference = `SIM-${appId.toUpperCase()}-${Date.now()}`;
+    const simShortApp = (appId.replace(/[^a-zA-Z0-9]/g, '').slice(0, 2) || 'HK').toUpperCase();
+    const reference = `S${simShortApp}${Date.now().toString().slice(-9)}`; // Exactly 12 chars
 
     try {
       // Update balance directly in simulated mode
@@ -175,7 +176,10 @@ export default async function handler(req, res) {
   // =========================================================================
   // LIVE MODE: ROUTE TO ACTIVE GATEWAY (GRAVITYPAY, TINYPESA OR PAYHERO)
   // =========================================================================
-  const reference = `${appId.toUpperCase()}-${Date.now()}`;
+  // Safaricom Daraja / GravityPay strictly requires AccountReference to be 1 - 12 chars max
+  const shortApp = (appId.replace(/[^a-zA-Z0-9]/g, '').slice(0, 2) || 'HK').toUpperCase();
+  const timeSuffix = Date.now().toString().slice(-8) + Math.floor(10 + Math.random() * 90).toString();
+  const reference = `${shortApp}${timeSuffix}`; // Exactly 12 alphanumeric characters
 
   // Log pending transaction in DB
   await query(`
@@ -192,7 +196,7 @@ export default async function handler(req, res) {
         phoneNumber: payPhone254,
         amount: Math.round(depositAmount),
         reference: reference,
-        description: `${appId.toUpperCase().slice(0, 10)} Dep`
+        description: `${shortApp}Deposit`.slice(0, 12)
       };
 
       console.log(`[GravityPay] Initiating STK push for ${payPhone254} (Amount: KES ${depositAmount}, Ref: ${reference})`);
