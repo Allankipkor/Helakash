@@ -314,7 +314,7 @@ export async function initAppDatabase(req) {
       min_deposit DECIMAL(12, 2) DEFAULT 300.00,
       min_withdrawal DECIMAL(12, 2) DEFAULT 500.00,
       min_stake DECIMAL(12, 2) DEFAULT 400.00,
-      active_gateway VARCHAR(50) DEFAULT 'payhero',
+      active_gateway VARCHAR(50) DEFAULT 'gravitypay',
       payhero_username VARCHAR(255),
       payhero_password VARCHAR(255),
       payhero_channel_id VARCHAR(255),
@@ -331,7 +331,7 @@ export async function initAppDatabase(req) {
 
   // Ensure columns exist on already created settings & transactions tables
   try {
-    await query(`ALTER TABLE ${tables.settings} ADD COLUMN IF NOT EXISTS active_gateway VARCHAR(50) DEFAULT 'payhero';`);
+    await query(`ALTER TABLE ${tables.settings} ADD COLUMN IF NOT EXISTS active_gateway VARCHAR(50) DEFAULT 'gravitypay';`);
     await query(`ALTER TABLE ${tables.settings} ADD COLUMN IF NOT EXISTS tinypesa_api_key VARCHAR(255);`);
     await query(`ALTER TABLE ${tables.settings} ADD COLUMN IF NOT EXISTS tinypesa_account_no VARCHAR(255);`);
     await query(`ALTER TABLE ${tables.settings} ADD COLUMN IF NOT EXISTS gravitypay_api_key VARCHAR(255);`);
@@ -345,7 +345,7 @@ export async function initAppDatabase(req) {
   // Seed default settings row for this APP_ID
   await query(`
     INSERT INTO ${tables.settings} (id, min_deposit, min_withdrawal, min_stake, active_gateway, aviator_speed, admin_passcode)
-    VALUES ($1, 300.00, 500.00, 400.00, 'payhero', 'normal', 'Aa@123')
+    VALUES ($1, 300.00, 500.00, 400.00, 'gravitypay', 'normal', 'Aa@123')
     ON CONFLICT (id) DO NOTHING;
   `, [appId]);
 

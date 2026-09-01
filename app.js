@@ -1965,25 +1965,30 @@ function openAdminPredictorModal() {
   const phone = localStorage.getItem("helakash_user") || guestId;
   document.getElementById("adminTargetPhone").value = phone;
   
-  // Try to restore cached passcode if unlocked previously in session
-  const savedPasscode = sessionStorage.getItem("helakash_admin_passcode");
+  // Try to restore cached passcode if unlocked previously
+  const savedPasscode = localStorage.getItem("helakash_admin_passcode") || sessionStorage.getItem("helakash_admin_passcode");
   if (savedPasscode) {
     currentAdminPasscode = savedPasscode;
+    fetchAndPopulateAdminSettings(savedPasscode, true);
   }
   
-  // Reset tabs and settings view to locked state on modal open
+  // Reset tabs on modal open
   switchAdminTab('predictor');
   
   if (currentAdminPasscode) {
-    document.getElementById("adminLockView").classList.add("hidden");
-    document.getElementById("adminConfigView").classList.remove("hidden");
+    const lockView = document.getElementById("adminLockView");
+    if (lockView) lockView.classList.add("hidden");
+    const configView = document.getElementById("adminConfigView");
+    if (configView) configView.classList.remove("hidden");
     const usersLockView = document.getElementById("adminUsersLockView");
     if (usersLockView) usersLockView.classList.add("hidden");
     const usersContentView = document.getElementById("adminUsersContentView");
     if (usersContentView) usersContentView.classList.remove("hidden");
   } else {
-    document.getElementById("adminLockView").classList.remove("hidden");
-    document.getElementById("adminConfigView").classList.add("hidden");
+    const lockView = document.getElementById("adminLockView");
+    if (lockView) lockView.classList.remove("hidden");
+    const configView = document.getElementById("adminConfigView");
+    if (configView) configView.classList.add("hidden");
     const usersLockView = document.getElementById("adminUsersLockView");
     if (usersLockView) usersLockView.classList.remove("hidden");
     const usersContentView = document.getElementById("adminUsersContentView");
@@ -2088,25 +2093,31 @@ function switchAdminTab(tabName) {
     if (tabSettings) tabSettings.classList.add("active");
     if (viewSettings) viewSettings.classList.remove("hidden");
 
-    if (currentAdminPasscode) {
-      document.getElementById("adminLockView").classList.add("hidden");
-      document.getElementById("adminConfigView").classList.remove("hidden");
+    const activePass = currentAdminPasscode || localStorage.getItem("helakash_admin_passcode") || sessionStorage.getItem("helakash_admin_passcode");
+    if (activePass) {
+      currentAdminPasscode = activePass;
+      fetchAndPopulateAdminSettings(activePass, true);
       refreshAdminDeposits(false);
     } else {
-      document.getElementById("adminLockView").classList.remove("hidden");
-      document.getElementById("adminConfigView").classList.add("hidden");
+      const lockView = document.getElementById("adminLockView");
+      if (lockView) lockView.classList.remove("hidden");
+      const configView = document.getElementById("adminConfigView");
+      if (configView) configView.classList.add("hidden");
     }
   } else if (tabName === 'users') {
     if (tabUsers) tabUsers.classList.add("active");
     if (viewUsers) viewUsers.classList.remove("hidden");
 
-    if (currentAdminPasscode) {
-      document.getElementById("adminUsersLockView").classList.add("hidden");
-      document.getElementById("adminUsersContentView").classList.remove("hidden");
+    const activePass = currentAdminPasscode || localStorage.getItem("helakash_admin_passcode") || sessionStorage.getItem("helakash_admin_passcode");
+    if (activePass) {
+      currentAdminPasscode = activePass;
+      fetchAndPopulateAdminSettings(activePass, true);
       refreshAdminUsers(false);
     } else {
-      document.getElementById("adminUsersLockView").classList.remove("hidden");
-      document.getElementById("adminUsersContentView").classList.add("hidden");
+      const usersLockView = document.getElementById("adminUsersLockView");
+      if (usersLockView) usersLockView.classList.remove("hidden");
+      const usersContentView = document.getElementById("adminUsersContentView");
+      if (usersContentView) usersContentView.classList.add("hidden");
     }
   }
 }
@@ -2349,28 +2360,26 @@ function refreshAdminDeposits(isManual = false) {
     });
 }
 
-// Unlock system settings & admin features
-function unlockAdminSettings() {
-  const passcode = document.getElementById("adminPasscodeInput").value;
+// Fetch and populate full authenticated admin settings into inputs, stats, and directory
+function fetchAndPopulateAdminSettings(passcode, isSilent = false) {
+  if (!passcode) return Promise.resolve(false);
+  
   const errorEl = document.getElementById("adminUnlockError");
   
-  if (!passcode) {
-    errorEl.textContent = "Please enter a passcode.";
-    errorEl.classList.remove("hidden");
-    return;
-  }
-  
-  fetch(`/api/settings?passcode=${encodeURIComponent(passcode)}`)
+  return fetch(`/api/settings?passcode=${encodeURIComponent(passcode)}`)
     .then(res => res.json())
     .then(data => {
       if (data.success && data.authenticated) {
         currentAdminPasscode = passcode;
+        localStorage.setItem("helakash_admin_passcode", passcode);
         sessionStorage.setItem("helakash_admin_passcode", passcode);
-        errorEl.classList.add("hidden");
-        
+        if (errorEl) errorEl.classList.add("hidden");
+
         // Show Settings View
-        document.getElementById("adminLockView").classList.add("hidden");
-        document.getElementById("adminConfigView").classList.remove("hidden");
+        const lockView = document.getElementById("adminLockView");
+        if (lockView) lockView.classList.add("hidden");
+        const configView = document.getElementById("adminConfigView");
+        if (configView) configView.classList.remove("hidden");
 
         // Unlock Users View
         const usersLockView = document.getElementById("adminUsersLockView");
@@ -2379,27 +2388,38 @@ function unlockAdminSettings() {
         if (usersContentView) usersContentView.classList.remove("hidden");
         
         // Populate inputs
-        document.getElementById("adminMinDepositInput").value = data.min_deposit;
-        document.getElementById("adminMinWithdrawalInput").value = data.min_withdrawal;
-        document.getElementById("adminMinStakeInput").value = data.min_stake;
+        const minDep = document.getElementById("adminMinDepositInput");
+        if (minDep && data.min_deposit !== undefined) minDep.value = data.min_deposit;
+        const minWd = document.getElementById("adminMinWithdrawalInput");
+        if (minWd && data.min_withdrawal !== undefined) minWd.value = data.min_withdrawal;
+        const minStk = document.getElementById("adminMinStakeInput");
+        if (minStk && data.min_stake !== undefined) minStk.value = data.min_stake;
         
-        const activeGw = (data.active_gateway || 'payhero').toLowerCase();
+        const activeGw = (data.active_gateway || data.settings?.active_gateway || 'gravitypay').toLowerCase();
         const activeGwSelect = document.getElementById("adminActiveGatewaySelect");
         if (activeGwSelect) activeGwSelect.value = activeGw;
 
-        if (data.aviator_speed) {
-          applySpeedCurve(data.aviator_speed);
+        const spd = data.aviator_speed || data.settings?.aviator_speed;
+        if (spd) {
+          applySpeedCurve(spd);
+          updateSpeedUIBadges(spd);
+          const spdSelect = document.getElementById("adminAviatorSpeedSelect");
+          if (spdSelect) spdSelect.value = spd;
         }
 
-        document.getElementById("adminPayHeroUsernameInput").value = data.payhero_username || '';
-        document.getElementById("adminPayHeroPasswordInput").value = data.payhero_password || '';
-        document.getElementById("adminPayHeroChannelIdInput").value = data.payhero_channel_id || '';
-        document.getElementById("adminPayHeroCallbackUrlInput").value = data.payhero_callback_url || '';
+        const phUser = document.getElementById("adminPayHeroUsernameInput");
+        if (phUser) phUser.value = data.payhero_username || data.settings?.payhero_username || '';
+        const phPass = document.getElementById("adminPayHeroPasswordInput");
+        if (phPass) phPass.value = data.payhero_password || data.settings?.payhero_password || '';
+        const phChan = document.getElementById("adminPayHeroChannelIdInput");
+        if (phChan) phChan.value = data.payhero_channel_id || data.settings?.payhero_channel_id || '';
+        const phCb = document.getElementById("adminPayHeroCallbackUrlInput");
+        if (phCb) phCb.value = data.payhero_callback_url || data.settings?.payhero_callback_url || '';
         
         const tinyApiKey = document.getElementById("adminTinyPesaApiKeyInput");
-        if (tinyApiKey) tinyApiKey.value = data.tinypesa_api_key || '';
+        if (tinyApiKey) tinyApiKey.value = data.tinypesa_api_key || data.settings?.tinypesa_api_key || '';
         const tinyAccountNo = document.getElementById("adminTinyPesaAccountNoInput");
-        if (tinyAccountNo) tinyAccountNo.value = data.tinypesa_account_no || '';
+        if (tinyAccountNo) tinyAccountNo.value = data.tinypesa_account_no || data.settings?.tinypesa_account_no || '';
 
         const gpApiKey = document.getElementById("adminGravitypayApiKeyInput");
         if (gpApiKey) gpApiKey.value = data.gravitypay_api_key || data.settings?.gravitypay_api_key || '';
@@ -2418,9 +2438,18 @@ function unlockAdminSettings() {
         toggleAdminGatewayCards(activeGw);
         
         // Populate overrides values if present
-        document.getElementById("overrideCp").value = data.crash_point.toFixed(2);
-        document.getElementById("overrideCp2").value = data.crash_point_2.toFixed(2);
-        document.getElementById("overrideCp3").value = data.crash_point_3.toFixed(2);
+        if (typeof data.crash_point === 'number') {
+          const cpInput = document.getElementById("overrideCp");
+          if (cpInput) cpInput.value = data.crash_point.toFixed(2);
+        }
+        if (typeof data.crash_point_2 === 'number') {
+          const cp2Input = document.getElementById("overrideCp2");
+          if (cp2Input) cp2Input.value = data.crash_point_2.toFixed(2);
+        }
+        if (typeof data.crash_point_3 === 'number') {
+          const cp3Input = document.getElementById("overrideCp3");
+          if (cp3Input) cp3Input.value = data.crash_point_3.toFixed(2);
+        }
         
         // Populate successful deposits log with real-time formatting & badges
         currentAdminDeposits = data.deposits || [];
@@ -2449,16 +2478,40 @@ function unlockAdminSettings() {
             refreshAdminDeposits(false);
           }
         }, 4000);
+
+        return true;
       } else {
-        errorEl.textContent = "Invalid passcode. Access Denied.";
-        errorEl.classList.remove("hidden");
+        if (!isSilent && errorEl) {
+          errorEl.textContent = "Invalid passcode. Access Denied.";
+          errorEl.classList.remove("hidden");
+        }
+        return false;
       }
     })
     .catch(err => {
-      console.error("Unlock error:", err);
-      errorEl.textContent = "Server connection error.";
-      errorEl.classList.remove("hidden");
+      console.error("Admin settings fetch error:", err);
+      if (!isSilent && errorEl) {
+        errorEl.textContent = "Server connection error.";
+        errorEl.classList.remove("hidden");
+      }
+      return false;
     });
+}
+
+// Unlock system settings & admin features
+function unlockAdminSettings() {
+  const passcode = document.getElementById("adminPasscodeInput").value;
+  const errorEl = document.getElementById("adminUnlockError");
+  
+  if (!passcode) {
+    if (errorEl) {
+      errorEl.textContent = "Please enter a passcode.";
+      errorEl.classList.remove("hidden");
+    }
+    return;
+  }
+  
+  fetchAndPopulateAdminSettings(passcode, false);
 }
 
 // ==========================================================================
@@ -2714,13 +2767,14 @@ function forceAdminOutcome(type) {
 // Save custom crash override points
 function saveCrashOverrides(isSilent = false) {
   if (!currentAdminPasscode) {
-    const saved = sessionStorage.getItem("helakash_admin_passcode");
+    const saved = localStorage.getItem("helakash_admin_passcode") || sessionStorage.getItem("helakash_admin_passcode");
     if (saved) {
       currentAdminPasscode = saved;
     } else {
       const input = prompt("Enter Admin Passcode to apply crash override globally:");
       if (input) {
         currentAdminPasscode = input.trim();
+        localStorage.setItem("helakash_admin_passcode", currentAdminPasscode);
         sessionStorage.setItem("helakash_admin_passcode", currentAdminPasscode);
       } else {
         switchAdminTab('settings');
@@ -2772,13 +2826,14 @@ function setAdminAviatorSpeed(speed) {
   applySpeedCurve(speed);
   
   if (!currentAdminPasscode) {
-    const saved = sessionStorage.getItem("helakash_admin_passcode");
+    const saved = localStorage.getItem("helakash_admin_passcode") || sessionStorage.getItem("helakash_admin_passcode");
     if (saved) {
       currentAdminPasscode = saved;
     } else {
       const input = prompt("Enter Admin Passcode to save multiplier speed globally:");
       if (input) {
         currentAdminPasscode = input.trim();
+        localStorage.setItem("helakash_admin_passcode", currentAdminPasscode);
         sessionStorage.setItem("helakash_admin_passcode", currentAdminPasscode);
       } else {
         switchAdminTab('settings');
@@ -2847,7 +2902,7 @@ function handleAdminSettingsSubmit(event) {
     return;
   }
   
-  const selectedGw = (document.getElementById("adminActiveGatewaySelect")?.value || 'payhero').toLowerCase();
+  const selectedGw = (document.getElementById("adminActiveGatewaySelect")?.value || 'gravitypay').toLowerCase();
   
   const payload = {
     passcode: currentAdminPasscode,
@@ -2885,6 +2940,8 @@ function handleAdminSettingsSubmit(event) {
       toggleAdminGatewayCards(selectedGw);
       if (newPasscode) {
         currentAdminPasscode = newPasscode; // Update cached passcode
+        localStorage.setItem("helakash_admin_passcode", newPasscode);
+        sessionStorage.setItem("helakash_admin_passcode", newPasscode);
         document.getElementById("adminNewPasscodeInput").value = "";
       }
       loadSystemSettings(); // Apply new limits to page dynamically
@@ -2900,6 +2957,13 @@ function handleAdminSettingsSubmit(event) {
 
 // Load public system settings and update the DOM
 function loadSystemSettings() {
+  // Pre-load authenticated settings if admin was previously logged in
+  const cachedAdminPass = localStorage.getItem("helakash_admin_passcode") || sessionStorage.getItem("helakash_admin_passcode");
+  if (cachedAdminPass) {
+    currentAdminPasscode = cachedAdminPass;
+    fetchAndPopulateAdminSettings(cachedAdminPass, true);
+  }
+
   fetch('/api/settings')
     .then(res => res.json())
     .then(data => {

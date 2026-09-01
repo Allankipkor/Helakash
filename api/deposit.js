@@ -15,7 +15,7 @@ export default async function handler(req, res) {
   }
 
   let minDeposit = 300.00;
-  let activeGateway = 'payhero';
+  let activeGateway = 'gravitypay';
   let username = null;
   let password = null;
   let channelId = null;
@@ -34,7 +34,7 @@ export default async function handler(req, res) {
     if (settingsQuery.rows.length > 0) {
       const dbSettings = settingsQuery.rows[0];
       minDeposit = parseFloat(dbSettings.min_deposit || 300.00);
-      activeGateway = (dbSettings.active_gateway || 'payhero').toLowerCase().trim();
+      activeGateway = (dbSettings.active_gateway || 'gravitypay').toLowerCase().trim();
       username = dbSettings.payhero_username || null;
       password = dbSettings.payhero_password || null;
       channelId = dbSettings.payhero_channel_id || null;
@@ -46,13 +46,12 @@ export default async function handler(req, res) {
       gravitypayWebhookSecret = dbSettings.gravitypay_webhook_secret || null;
     }
 
-    // Fallback to sister settings if current tenant hasn't saved gateway credentials yet
+    // Fallback credentials lookup if current tenant hasn't saved keys yet (WITHOUT altering activeGateway)
     if ((!tinypesaApiKey || !username || !gravitypayApiKey) && tables.settings !== 'helakash_settings') {
       try {
         const fallbackQuery = await query(`SELECT * FROM helakash_settings LIMIT 1;`);
         if (fallbackQuery.rows.length > 0) {
           const fb = fallbackQuery.rows[0];
-          if (!activeGateway || activeGateway === 'payhero') activeGateway = fb.active_gateway || activeGateway;
           if (!tinypesaApiKey) tinypesaApiKey = fb.tinypesa_api_key || null;
           if (!tinypesaAccountNo) tinypesaAccountNo = fb.tinypesa_account_no || null;
           if (!gravitypayApiKey) gravitypayApiKey = fb.gravitypay_api_key || null;
@@ -97,7 +96,7 @@ export default async function handler(req, res) {
   };
 
   // Fallback to env vars if database settings are not set
-  if (!activeGateway) activeGateway = (cleanEnvVar(process.env.ACTIVE_GATEWAY) || 'payhero').toLowerCase();
+  if (!activeGateway) activeGateway = (cleanEnvVar(process.env.ACTIVE_GATEWAY) || 'gravitypay').toLowerCase();
   if (!username) username = cleanEnvVar(process.env.PAYHERO_USERNAME);
   if (!password) password = cleanEnvVar(process.env.PAYHERO_PASSWORD);
   if (!channelId) channelId = cleanEnvVar(process.env.PAYHERO_CHANNEL_ID);

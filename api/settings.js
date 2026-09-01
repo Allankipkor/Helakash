@@ -137,7 +137,7 @@ export default async function handler(req, res) {
           min_deposit: parseFloat(dbSettings.min_deposit || 300.00),
           min_withdrawal: parseFloat(dbSettings.min_withdrawal || 500.00),
           min_stake: parseFloat(dbSettings.min_stake || 400.00),
-          active_gateway: dbSettings.active_gateway || 'payhero',
+          active_gateway: dbSettings.active_gateway || 'gravitypay',
           aviator_speed: dbSettings.aviator_speed || 'normal',
           payhero_username: dbSettings.payhero_username || '',
           payhero_password: dbSettings.payhero_password || '',
@@ -157,7 +157,7 @@ export default async function handler(req, res) {
             min_deposit: parseFloat(dbSettings.min_deposit || 300.00),
             min_withdrawal: parseFloat(dbSettings.min_withdrawal || 500.00),
             min_stake: parseFloat(dbSettings.min_stake || 400.00),
-            active_gateway: dbSettings.active_gateway || 'payhero',
+            active_gateway: dbSettings.active_gateway || 'gravitypay',
             aviator_speed: dbSettings.aviator_speed || 'normal',
             payhero_username: dbSettings.payhero_username || '',
             payhero_password: dbSettings.payhero_password || '',
@@ -205,7 +205,7 @@ export default async function handler(req, res) {
         min_deposit: parseFloat(dbSettings.min_deposit || 300.00),
         min_withdrawal: parseFloat(dbSettings.min_withdrawal || 500.00),
         min_stake: parseFloat(dbSettings.min_stake || 400.00),
-        active_gateway: dbSettings.active_gateway || 'payhero',
+        active_gateway: dbSettings.active_gateway || 'gravitypay',
         aviator_speed: dbSettings.aviator_speed || 'normal'
       });
 
@@ -359,7 +359,7 @@ export default async function handler(req, res) {
         // Ensure row exists for this specific appId
         await query(`
           INSERT INTO ${tables.settings} (id, min_deposit, min_withdrawal, min_stake, active_gateway, aviator_speed, admin_passcode)
-          VALUES ($1, 300.00, 500.00, 400.00, 'payhero', 'normal', $2)
+          VALUES ($1, 300.00, 500.00, 400.00, 'gravitypay', 'normal', $2)
           ON CONFLICT (id) DO NOTHING;
         `, [appId, updatePasscode]);
 

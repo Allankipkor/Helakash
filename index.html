@@ -799,12 +799,12 @@
               <div class="form-group" style="margin-bottom: 10px;">
                 <label for="adminActiveGatewaySelect" class="input-label" style="display: block; margin-bottom: 4px; font-size: 11px;">Select Gateway in Use</label>
                 <select id="adminActiveGatewaySelect" onchange="toggleAdminGatewayCards(this.value)"
-                  style="background: var(--bg-input); border: 1px solid rgba(16, 185, 129, 0.4); border-radius: 6px; color: #fff; padding: 10px; font-size: 13px; width: 100%; box-sizing: border-box; font-weight: 600; cursor: pointer;">
-                  <option value="payhero">PayHero (Primary Gateway)</option>
+                  style="background: var(--bg-input); border: 1px solid rgba(56, 189, 248, 0.4); border-radius: 6px; color: #fff; padding: 10px; font-size: 13px; width: 100%; box-sizing: border-box; font-weight: 600; cursor: pointer;">
+                  <option value="gravitypay" selected>⚡ GravityPay (Primary Gateway)</option>
+                  <option value="payhero">PayHero (Backup Gateway)</option>
                   <option value="tinypesa">TinyPesa (Backup Gateway)</option>
-                  <option value="gravitypay">⚡ GravityPay (gravitypayapp.com)</option>
                 </select>
-                <small style="color: #94a3b8; font-size: 11px; margin-top: 4px; display: block;">Switch between PayHero, TinyPesa, and GravityPay anytime with 1 click.</small>
+                <small style="color: #94a3b8; font-size: 11px; margin-top: 4px; display: block;">Active Gateway: GravityPay is the primary STK push gateway.</small>
               </div>
             </div>
 
