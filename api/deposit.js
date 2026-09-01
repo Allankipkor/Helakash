@@ -22,6 +22,9 @@ export default async function handler(req, res) {
   let callbackUrl = null;
   let tinypesaApiKey = null;
   let tinypesaAccountNo = null;
+  let gravitypayApiKey = null;
+  let gravitypaySecretKey = null;
+  let gravitypayWebhookSecret = null;
 
   try {
     let settingsQuery = await query(`SELECT * FROM ${tables.settings} WHERE id = $1;`, [appId]);
@@ -38,10 +41,13 @@ export default async function handler(req, res) {
       callbackUrl = dbSettings.payhero_callback_url || null;
       tinypesaApiKey = dbSettings.tinypesa_api_key || null;
       tinypesaAccountNo = dbSettings.tinypesa_account_no || null;
+      gravitypayApiKey = dbSettings.gravitypay_api_key || null;
+      gravitypaySecretKey = dbSettings.gravitypay_secret_key || null;
+      gravitypayWebhookSecret = dbSettings.gravitypay_webhook_secret || null;
     }
 
     // Fallback to sister settings if current tenant hasn't saved gateway credentials yet
-    if ((!tinypesaApiKey || !username) && tables.settings !== 'helakash_settings') {
+    if ((!tinypesaApiKey || !username || !gravitypayApiKey) && tables.settings !== 'helakash_settings') {
       try {
         const fallbackQuery = await query(`SELECT * FROM helakash_settings LIMIT 1;`);
         if (fallbackQuery.rows.length > 0) {
@@ -49,6 +55,9 @@ export default async function handler(req, res) {
           if (!activeGateway || activeGateway === 'payhero') activeGateway = fb.active_gateway || activeGateway;
           if (!tinypesaApiKey) tinypesaApiKey = fb.tinypesa_api_key || null;
           if (!tinypesaAccountNo) tinypesaAccountNo = fb.tinypesa_account_no || null;
+          if (!gravitypayApiKey) gravitypayApiKey = fb.gravitypay_api_key || null;
+          if (!gravitypaySecretKey) gravitypaySecretKey = fb.gravitypay_secret_key || null;
+          if (!gravitypayWebhookSecret) gravitypayWebhookSecret = fb.gravitypay_webhook_secret || null;
           if (!username) username = fb.payhero_username || null;
           if (!password) password = fb.payhero_password || null;
           if (!channelId) channelId = fb.payhero_channel_id || null;
@@ -94,6 +103,9 @@ export default async function handler(req, res) {
   if (!channelId) channelId = cleanEnvVar(process.env.PAYHERO_CHANNEL_ID);
   if (!tinypesaApiKey) tinypesaApiKey = cleanEnvVar(process.env.TINYPESA_API_KEY);
   if (!tinypesaAccountNo) tinypesaAccountNo = cleanEnvVar(process.env.TINYPESA_ACCOUNT_NO);
+  if (!gravitypayApiKey) gravitypayApiKey = cleanEnvVar(process.env.GRAVITYPAY_API_KEY || process.env.GRAVITYPAY_PUBLIC_KEY);
+  if (!gravitypaySecretKey) gravitypaySecretKey = cleanEnvVar(process.env.GRAVITYPAY_SECRET_KEY || process.env.GRAVITYPAY_BEARER_TOKEN);
+  if (!gravitypayWebhookSecret) gravitypayWebhookSecret = cleanEnvVar(process.env.GRAVITYPAY_WEBHOOK_SECRET || process.env.GRAVITYPAY_SIGNING_SECRET);
   if (!callbackUrl) {
     callbackUrl = cleanEnvVar(process.env.PAYHERO_CALLBACK_URL);
     if (!callbackUrl && req.headers && req.headers.host) {
@@ -117,8 +129,11 @@ export default async function handler(req, res) {
     tinypesaAccountNo = process.env.TINYPESA_USERNAME || process.env.TINYPESA_ACCOUNT_NO || 'deposit';
   }
 
+  const isGravityPay = activeGateway === 'gravitypay';
   const isTinyPesa = activeGateway === 'tinypesa';
-  const missingCredentials = isTinyPesa ? !tinypesaApiKey : (!username || !password || !channelId);
+  const missingCredentials = isGravityPay
+    ? (!gravitypayApiKey || !gravitypaySecretKey)
+    : (isTinyPesa ? !tinypesaApiKey : (!username || !password || !channelId));
 
   // Fallback to SIMULATED mode if explicitly requested or if credentials are missing
   if (req.body.simulated || missingCredentials) {
@@ -159,7 +174,7 @@ export default async function handler(req, res) {
   }
 
   // =========================================================================
-  // LIVE MODE: ROUTE TO ACTIVE GATEWAY (TINYPESA OR PAYHERO)
+  // LIVE MODE: ROUTE TO ACTIVE GATEWAY (GRAVITYPAY, TINYPESA OR PAYHERO)
   // =========================================================================
   const reference = `${appId.toUpperCase()}-${Date.now()}`;
 
@@ -170,7 +185,85 @@ export default async function handler(req, res) {
   `, [userPhone, depositAmount, reference]);
 
   // -------------------------------------------------------------------------
-  // OPTION A: TINYPESA GATEWAY (OFFICIAL V1 SPECIFICATION)
+  // OPTION A: GRAVITYPAY GATEWAY (gravitypayapp.com)
+  // -------------------------------------------------------------------------
+  if (isGravityPay) {
+    try {
+      const payload = {
+        phoneNumber: payPhone254,
+        amount: Math.round(depositAmount),
+        reference: reference,
+        description: `${appId.toUpperCase().slice(0, 10)} Dep`
+      };
+
+      console.log(`[GravityPay] Initiating STK push for ${payPhone254} (Amount: KES ${depositAmount}, Ref: ${reference})`);
+
+      const response = await fetch('https://api.gravitypayapp.com/api/v1/stk/push', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${gravitypaySecretKey}`,
+          'x-api-key': gravitypayApiKey
+        },
+        body: JSON.stringify(payload)
+      });
+
+      let data;
+      try {
+        data = await response.json();
+      } catch (e) {
+        data = null;
+      }
+
+      if (!response.ok || (data && data.success === false)) {
+        await query(`
+          UPDATE ${tables.transactions}
+          SET status = 'FAILED'
+          WHERE reference = $1;
+        `, [reference]);
+
+        console.error("GravityPay STK push failed. Status:", response.status, "Data:", data);
+        const errMsg = data?.message || data?.error || data?.error_message || `GravityPay API Error (${response.status})`;
+        return res.status(response.status || 400).json({ error: errMsg });
+      }
+
+      const checkoutId = data?.data?.checkoutRequestId || data?.checkoutRequestId || '';
+      const txId = data?.data?.transactionId || data?.transactionId || '';
+      if (checkoutId || txId) {
+        try {
+          await query(`
+            UPDATE ${tables.transactions}
+            SET checkout_request_id = $1, gateway_tx_id = $2
+            WHERE reference = $3;
+          `, [checkoutId, txId, reference]);
+        } catch (saveErr) {
+          console.warn("Notice: could not save checkout_request_id:", saveErr.message);
+        }
+      }
+
+      return res.status(200).json({
+        success: true,
+        gateway: 'gravitypay',
+        method: 'mpesa',
+        message: data?.message || 'STK Push initiated successfully via GravityPay',
+        reference: reference,
+        checkoutRequestId: checkoutId,
+        transactionId: txId,
+        response: data
+      });
+    } catch (gpErr) {
+      await query(`
+        UPDATE ${tables.transactions}
+        SET status = 'FAILED'
+        WHERE reference = $1;
+      `, [reference]);
+      console.error("GravityPay request exception:", gpErr.message);
+      return res.status(500).json({ error: `GravityPay connection error: ${gpErr.message}` });
+    }
+  }
+
+  // -------------------------------------------------------------------------
+  // OPTION B: TINYPESA GATEWAY (OFFICIAL V1 SPECIFICATION)
   // -------------------------------------------------------------------------
   if (isTinyPesa) {
     try {

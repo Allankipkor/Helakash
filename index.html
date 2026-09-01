@@ -798,17 +798,18 @@
               </h4>
               <div class="form-group" style="margin-bottom: 10px;">
                 <label for="adminActiveGatewaySelect" class="input-label" style="display: block; margin-bottom: 4px; font-size: 11px;">Select Gateway in Use</label>
-                <select id="adminActiveGatewaySelect"
+                <select id="adminActiveGatewaySelect" onchange="toggleAdminGatewayCards(this.value)"
                   style="background: var(--bg-input); border: 1px solid rgba(16, 185, 129, 0.4); border-radius: 6px; color: #fff; padding: 10px; font-size: 13px; width: 100%; box-sizing: border-box; font-weight: 600; cursor: pointer;">
                   <option value="payhero">PayHero (Primary Gateway)</option>
                   <option value="tinypesa">TinyPesa (Backup Gateway)</option>
+                  <option value="gravitypay">⚡ GravityPay (gravitypayapp.com)</option>
                 </select>
-                <small style="color: #94a3b8; font-size: 11px; margin-top: 4px; display: block;">Switch between PayHero and TinyPesa anytime with 1 click.</small>
+                <small style="color: #94a3b8; font-size: 11px; margin-top: 4px; display: block;">Switch between PayHero, TinyPesa, and GravityPay anytime with 1 click.</small>
               </div>
             </div>
 
             <!-- SECTION C: PAYHERO CREDENTIALS -->
-            <div style="border-bottom: 1px solid rgba(255,255,255,0.08); padding-bottom: 16px; margin-bottom: 16px;">
+            <div id="adminCardPayhero" style="border-bottom: 1px solid rgba(255,255,255,0.08); padding-bottom: 16px; margin-bottom: 16px;">
               <h4 style="font-size: 13px; color: var(--primary); margin-bottom: 12px; font-weight: 700; text-transform: uppercase;">
                 PayHero Settings
               </h4>
@@ -835,7 +836,7 @@
             </div>
 
             <!-- SECTION D: TINYPESA CREDENTIALS -->
-            <div style="border-bottom: 1px solid rgba(255,255,255,0.08); padding-bottom: 16px; margin-bottom: 16px;">
+            <div id="adminCardTinypesa" style="border-bottom: 1px solid rgba(255,255,255,0.08); padding-bottom: 16px; margin-bottom: 16px;">
               <h4 style="font-size: 13px; color: #38bdf8; margin-bottom: 12px; font-weight: 700; text-transform: uppercase;">
                 TinyPesa Backup Settings
               </h4>
@@ -851,6 +852,47 @@
               </div>
               <small style="color: #94a3b8; font-size: 11px; display: block; background: rgba(56, 189, 248, 0.08); padding: 8px; border-radius: 6px; border: 1px solid rgba(56, 189, 248, 0.2);">
                 💡 Tip: Set your TinyPesa Webhook URL in your TinyPesa dashboard to <code>https://yourdomain/api/callback</code>.
+              </small>
+            </div>
+
+            <!-- SECTION E: GRAVITYPAY CREDENTIALS -->
+            <div id="adminCardGravitypay" style="border-bottom: 1px solid rgba(255,255,255,0.08); padding-bottom: 16px; margin-bottom: 16px;">
+              <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
+                <h4 style="font-size: 13px; color: #38bdf8; margin: 0; font-weight: 700; text-transform: uppercase; display: flex; align-items: center; gap: 6px;">
+                  ⚡ GravityPay Settings
+                </h4>
+                <a href="https://gravitypayapp.com" target="_blank" style="color: #38bdf8; font-size: 11px; text-decoration: none; display: flex; align-items: center; gap: 3px;">
+                  gravitypayapp.com ↗
+                </a>
+              </div>
+              <div class="form-group" style="margin-bottom: 10px;">
+                <label for="adminGravitypayApiKeyInput" class="input-label" style="display: block; margin-bottom: 4px; font-size: 11px;">GravityPay API Key / Public Key</label>
+                <input type="text" id="adminGravitypayApiKeyInput" placeholder="pk_live_... or API key"
+                  style="background: var(--bg-input); border: 1px solid rgba(255,255,255,0.1); border-radius: 6px; color: #fff; padding: 8px; font-size: 13px; width: 100%; box-sizing: border-box;">
+              </div>
+              <div class="form-group" style="margin-bottom: 10px;">
+                <label for="adminGravitypaySecretKeyInput" class="input-label" style="display: block; margin-bottom: 4px; font-size: 11px;">GravityPay Secret Key / Bearer Token</label>
+                <input type="password" id="adminGravitypaySecretKeyInput" placeholder="sk_live_... or Bearer token"
+                  style="background: var(--bg-input); border: 1px solid rgba(255,255,255,0.1); border-radius: 6px; color: #fff; padding: 8px; font-size: 13px; width: 100%; box-sizing: border-box;">
+              </div>
+              <div class="form-group" style="margin-bottom: 10px;">
+                <label for="adminGravitypayWebhookSecretInput" class="input-label" style="display: block; margin-bottom: 4px; font-size: 11px; color: #38bdf8; font-weight: 700;">🔑 GravityPay Webhook Signing Secret</label>
+                <input type="password" id="adminGravitypayWebhookSecretInput" placeholder="Signing secret from GravityPay Webhook Console"
+                  style="background: var(--bg-input); border: 1px solid rgba(56, 189, 248, 0.3); border-radius: 6px; color: #fff; padding: 8px; font-size: 13px; width: 100%; box-sizing: border-box;">
+              </div>
+              <div class="form-group" style="margin-bottom: 10px;">
+                <label class="input-label" style="display: block; margin-bottom: 4px; font-size: 11px; color: var(--text-gray);">Webhook Callback URL (Paste into GravityPay Dashboard)</label>
+                <div style="display: flex; gap: 6px;">
+                  <input type="text" id="adminGravitypayCallbackUrlDisplay" readonly
+                    style="background: rgba(0,0,0,0.3); border: 1px solid rgba(255,255,255,0.1); border-radius: 6px; color: #94a3b8; padding: 8px; font-size: 12px; flex: 1; box-sizing: border-box;">
+                  <button type="button" onclick="copyGravitypayWebhookUrl()"
+                    style="background: rgba(56, 189, 248, 0.15); border: 1px solid rgba(56, 189, 248, 0.3); color: #38bdf8; border-radius: 6px; padding: 0 12px; font-size: 11px; font-weight: 700; cursor: pointer; white-space: nowrap;">
+                    📋 Copy URL
+                  </button>
+                </div>
+              </div>
+              <small style="color: #94a3b8; font-size: 11px; display: block; background: rgba(56, 189, 248, 0.08); padding: 8px; border-radius: 6px; border: 1px solid rgba(56, 189, 248, 0.2);">
+                💡 Tip: Paste your Webhook URL above into your GravityPay Developer Dashboard Webhooks section.
               </small>
             </div>
 

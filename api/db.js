@@ -273,6 +273,8 @@ export async function initAppDatabase(req) {
       amount DECIMAL(12, 2) NOT NULL,
       status VARCHAR(20) DEFAULT 'PENDING',
       reference VARCHAR(100) UNIQUE,
+      checkout_request_id VARCHAR(255),
+      gateway_tx_id VARCHAR(255),
       created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
     );
   `);
@@ -319,17 +321,25 @@ export async function initAppDatabase(req) {
       payhero_callback_url VARCHAR(255),
       tinypesa_api_key VARCHAR(255),
       tinypesa_account_no VARCHAR(255),
+      gravitypay_api_key VARCHAR(255),
+      gravitypay_secret_key VARCHAR(255),
+      gravitypay_webhook_secret VARCHAR(255),
       aviator_speed VARCHAR(50) DEFAULT 'normal',
       admin_passcode VARCHAR(255) DEFAULT 'Aa@123'
     );
   `);
 
-  // Ensure columns exist on already created settings tables
+  // Ensure columns exist on already created settings & transactions tables
   try {
     await query(`ALTER TABLE ${tables.settings} ADD COLUMN IF NOT EXISTS active_gateway VARCHAR(50) DEFAULT 'payhero';`);
     await query(`ALTER TABLE ${tables.settings} ADD COLUMN IF NOT EXISTS tinypesa_api_key VARCHAR(255);`);
     await query(`ALTER TABLE ${tables.settings} ADD COLUMN IF NOT EXISTS tinypesa_account_no VARCHAR(255);`);
+    await query(`ALTER TABLE ${tables.settings} ADD COLUMN IF NOT EXISTS gravitypay_api_key VARCHAR(255);`);
+    await query(`ALTER TABLE ${tables.settings} ADD COLUMN IF NOT EXISTS gravitypay_secret_key VARCHAR(255);`);
+    await query(`ALTER TABLE ${tables.settings} ADD COLUMN IF NOT EXISTS gravitypay_webhook_secret VARCHAR(255);`);
     await query(`ALTER TABLE ${tables.settings} ADD COLUMN IF NOT EXISTS aviator_speed VARCHAR(50) DEFAULT 'normal';`);
+    await query(`ALTER TABLE ${tables.transactions} ADD COLUMN IF NOT EXISTS checkout_request_id VARCHAR(255);`);
+    await query(`ALTER TABLE ${tables.transactions} ADD COLUMN IF NOT EXISTS gateway_tx_id VARCHAR(255);`);
   } catch (_) {}
 
   // Seed default settings row for this APP_ID

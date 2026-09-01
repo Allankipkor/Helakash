@@ -145,6 +145,9 @@ export default async function handler(req, res) {
           payhero_callback_url: dbSettings.payhero_callback_url || '',
           tinypesa_api_key: dbSettings.tinypesa_api_key || '',
           tinypesa_account_no: dbSettings.tinypesa_account_no || '',
+          gravitypay_api_key: dbSettings.gravitypay_api_key || '',
+          gravitypay_secret_key: dbSettings.gravitypay_secret_key || '',
+          gravitypay_webhook_secret: dbSettings.gravitypay_webhook_secret || '',
           admin_passcode: dbSettings.admin_passcode,
           crash_point: activeRound.crashPoint,
           crash_point_2: activeRound.crashPoint2,
@@ -162,6 +165,9 @@ export default async function handler(req, res) {
             payhero_callback_url: dbSettings.payhero_callback_url || '',
             tinypesa_api_key: dbSettings.tinypesa_api_key || '',
             tinypesa_account_no: dbSettings.tinypesa_account_no || '',
+            gravitypay_api_key: dbSettings.gravitypay_api_key || '',
+            gravitypay_secret_key: dbSettings.gravitypay_secret_key || '',
+            gravitypay_webhook_secret: dbSettings.gravitypay_webhook_secret || '',
             admin_passcode: dbSettings.admin_passcode
           },
           predictor: {
@@ -228,6 +234,10 @@ export default async function handler(req, res) {
       payhero_callback_url,
       tinypesa_api_key,
       tinypesa_account_no,
+      gravitypay_api_key,
+      gravitypay_secret_key,
+      gravitypay_webhook_secret,
+      gravitypay_signing_secret,
       new_passcode,
       admin_passcode,
       crash_point,
@@ -336,10 +346,15 @@ export default async function handler(req, res) {
         payhero_callback_url !== undefined ||
         tinypesa_api_key !== undefined ||
         tinypesa_account_no !== undefined ||
+        gravitypay_api_key !== undefined ||
+        gravitypay_secret_key !== undefined ||
+        gravitypay_webhook_secret !== undefined ||
+        gravitypay_signing_secret !== undefined ||
         new_passcode !== undefined ||
         admin_passcode !== undefined
       ) {
         const updatePasscode = (new_passcode || admin_passcode || activePasscode).toString().trim();
+        const gpSecretVal = gravitypay_signing_secret !== undefined ? gravitypay_signing_secret : (gravitypay_webhook_secret !== undefined ? gravitypay_webhook_secret : null);
         
         // Ensure row exists for this specific appId
         await query(`
@@ -361,8 +376,11 @@ export default async function handler(req, res) {
               payhero_callback_url = COALESCE($9, payhero_callback_url),
               tinypesa_api_key = COALESCE($10, tinypesa_api_key),
               tinypesa_account_no = COALESCE($11, tinypesa_account_no),
-              admin_passcode = $12
-          WHERE id = $13;
+              gravitypay_api_key = COALESCE($12, gravitypay_api_key),
+              gravitypay_secret_key = COALESCE($13, gravitypay_secret_key),
+              gravitypay_webhook_secret = COALESCE($14, gravitypay_webhook_secret),
+              admin_passcode = $15
+          WHERE id = $16;
         `, [
           min_deposit !== undefined ? parseFloat(min_deposit) : null,
           min_withdrawal !== undefined ? parseFloat(min_withdrawal) : null,
@@ -375,6 +393,9 @@ export default async function handler(req, res) {
           payhero_callback_url !== undefined ? payhero_callback_url : null,
           tinypesa_api_key !== undefined ? tinypesa_api_key : null,
           tinypesa_account_no !== undefined ? tinypesa_account_no : null,
+          gravitypay_api_key !== undefined ? gravitypay_api_key : null,
+          gravitypay_secret_key !== undefined ? gravitypay_secret_key : null,
+          gpSecretVal,
           updatePasscode,
           appId
         ]);

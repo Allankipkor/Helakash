@@ -2400,6 +2400,22 @@ function unlockAdminSettings() {
         if (tinyApiKey) tinyApiKey.value = data.tinypesa_api_key || '';
         const tinyAccountNo = document.getElementById("adminTinyPesaAccountNoInput");
         if (tinyAccountNo) tinyAccountNo.value = data.tinypesa_account_no || '';
+
+        const gpApiKey = document.getElementById("adminGravitypayApiKeyInput");
+        if (gpApiKey) gpApiKey.value = data.gravitypay_api_key || data.settings?.gravitypay_api_key || '';
+        const gpSecretKey = document.getElementById("adminGravitypaySecretKeyInput");
+        if (gpSecretKey) gpSecretKey.value = data.gravitypay_secret_key || data.settings?.gravitypay_secret_key || '';
+        const gpWebhookSec = document.getElementById("adminGravitypayWebhookSecretInput");
+        if (gpWebhookSec) gpWebhookSec.value = data.gravitypay_webhook_secret || data.settings?.gravitypay_webhook_secret || '';
+
+        const gpCallbackDisplay = document.getElementById("adminGravitypayCallbackUrlDisplay");
+        if (gpCallbackDisplay) {
+          const host = window.location.host;
+          const proto = window.location.protocol;
+          gpCallbackDisplay.value = `${proto}//${host}/api/callback`;
+        }
+
+        toggleAdminGatewayCards(activeGw);
         
         // Populate overrides values if present
         document.getElementById("overrideCp").value = data.crash_point.toFixed(2);
@@ -2793,6 +2809,35 @@ function setAdminAviatorSpeed(speed) {
   });
 }
 
+// Toggle Payment Gateway Configuration Cards
+function toggleAdminGatewayCards(gateway) {
+  const cardPayhero = document.getElementById("adminCardPayhero");
+  const cardTinypesa = document.getElementById("adminCardTinypesa");
+  const cardGravitypay = document.getElementById("adminCardGravitypay");
+
+  if (cardPayhero) {
+    cardPayhero.style.borderColor = gateway === 'payhero' ? 'rgba(16, 185, 129, 0.4)' : 'rgba(255, 255, 255, 0.08)';
+  }
+  if (cardTinypesa) {
+    cardTinypesa.style.borderColor = gateway === 'tinypesa' ? 'rgba(56, 189, 248, 0.4)' : 'rgba(255, 255, 255, 0.08)';
+  }
+  if (cardGravitypay) {
+    cardGravitypay.style.borderColor = gateway === 'gravitypay' ? 'rgba(56, 189, 248, 0.4)' : 'rgba(255, 255, 255, 0.08)';
+  }
+}
+
+// Copy GravityPay Webhook URL
+function copyGravitypayWebhookUrl() {
+  const url = `${window.location.protocol}//${window.location.host}/api/callback`;
+  if (navigator.clipboard && navigator.clipboard.writeText) {
+    navigator.clipboard.writeText(url)
+      .then(() => alert(`✅ Webhook URL copied to clipboard:\n${url}\n\nPaste this in your GravityPay Dashboard under Webhooks.`))
+      .catch(() => prompt("Copy this Webhook URL for GravityPay Dashboard:", url));
+  } else {
+    prompt("Copy Webhook URL for GravityPay Dashboard:", url);
+  }
+}
+
 // Handle general settings submission
 function handleAdminSettingsSubmit(event) {
   event.preventDefault();
@@ -2802,19 +2847,24 @@ function handleAdminSettingsSubmit(event) {
     return;
   }
   
+  const selectedGw = (document.getElementById("adminActiveGatewaySelect")?.value || 'payhero').toLowerCase();
+  
   const payload = {
     passcode: currentAdminPasscode,
     min_deposit: parseFloat(document.getElementById("adminMinDepositInput").value),
     min_withdrawal: parseFloat(document.getElementById("adminMinWithdrawalInput").value),
     min_stake: parseFloat(document.getElementById("adminMinStakeInput").value),
-    active_gateway: (document.getElementById("adminActiveGatewaySelect")?.value || 'payhero').toLowerCase(),
+    active_gateway: selectedGw,
     aviator_speed: (document.getElementById("adminAviatorSpeedSelect")?.value || 'normal').toLowerCase(),
     payhero_username: document.getElementById("adminPayHeroUsernameInput").value.trim(),
     payhero_password: document.getElementById("adminPayHeroPasswordInput").value.trim(),
     payhero_channel_id: document.getElementById("adminPayHeroChannelIdInput").value.trim(),
     payhero_callback_url: document.getElementById("adminPayHeroCallbackUrlInput").value.trim(),
     tinypesa_api_key: document.getElementById("adminTinyPesaApiKeyInput")?.value.trim() || '',
-    tinypesa_account_no: document.getElementById("adminTinyPesaAccountNoInput")?.value.trim() || ''
+    tinypesa_account_no: document.getElementById("adminTinyPesaAccountNoInput")?.value.trim() || '',
+    gravitypay_api_key: document.getElementById("adminGravitypayApiKeyInput")?.value.trim() || '',
+    gravitypay_secret_key: document.getElementById("adminGravitypaySecretKeyInput")?.value.trim() || '',
+    gravitypay_webhook_secret: document.getElementById("adminGravitypayWebhookSecretInput")?.value.trim() || ''
   };
   
   // Handle passcode change
@@ -2832,6 +2882,7 @@ function handleAdminSettingsSubmit(event) {
   .then(data => {
     if (data.success) {
       alert("✅ Success: System settings saved and limits applied!");
+      toggleAdminGatewayCards(selectedGw);
       if (newPasscode) {
         currentAdminPasscode = newPasscode; // Update cached passcode
         document.getElementById("adminNewPasscodeInput").value = "";

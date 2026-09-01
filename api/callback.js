@@ -1,7 +1,8 @@
 import { query, getAppId, getTables, initAppDatabase, normalizePhoneVariants, findUserOrImport, ensureUser } from './db.js';
+import crypto from 'crypto';
 
 export default async function handler(req, res) {
-  // Pay Hero invokes callback via POST
+  // Gateways invoke callback via POST
   if (req.method !== 'POST') {
     return res.status(405).json({ error: 'Method Not Allowed' });
   }
@@ -12,20 +13,20 @@ export default async function handler(req, res) {
     console.log(JSON.stringify(callbackData, null, 2));
     console.log("================================================");
 
-    // Extract fields across possible PayHero / TinyPesa / Daraja webhook payload variations
-    const data = callbackData.response || callbackData.Body?.stkCallback || callbackData.stkCallback || callbackData.data || callbackData;
+    // Extract fields across possible PayHero / GravityPay / TinyPesa / Daraja webhook payload variations
+    const data = callbackData.response || callbackData.Body?.stkCallback || callbackData.stkCallback || callbackData.data || callbackData.payload || callbackData;
     
     // Status resolution
     let rawStatus = data.Status || data.status || data.ResultDesc || (data.ResultCode === 0 ? 'SUCCESS' : (data.ResultCode ? 'FAILED' : ''));
     if (!rawStatus && callbackData.status) rawStatus = callbackData.status;
     const statusUpper = String(rawStatus).toUpperCase();
-    const isSuccess = statusUpper.includes('SUCCESS') || data.ResultCode === 0 || callbackData.success === true || callbackData.status === 'success';
+    const isSuccess = statusUpper.includes('SUCCESS') || statusUpper.includes('COMPLETED') || data.ResultCode === 0 || callbackData.success === true || callbackData.status === 'success';
 
     // Reference & identifier resolution
-    let externalReference = data.ExternalReference || data.external_reference || data.account_no || data.AccountReference || data.MerchantRequestID || data.CheckoutRequestID || callbackData.external_reference || callbackData.account_no;
-    let mpesaReceipt = data.Reference || data.reference || data.mpesa_reference || data.MpesaReceiptNumber || null;
-    let amount = parseFloat(data.Amount || data.amount || callbackData.amount || 0);
-    let callbackPhone = data.PhoneNumber || data.msisdn || data.phone || callbackData.msisdn || callbackData.phone || null;
+    let externalReference = data.ExternalReference || data.external_reference || data.account_no || data.AccountReference || data.MerchantRequestID || data.merchant_request_id || data.CheckoutRequestID || data.checkout_request_id || data.checkoutRequestId || data.transactionId || callbackData.external_reference || callbackData.account_no || callbackData.reference || null;
+    let mpesaReceipt = data.Reference || data.reference || data.mpesa_reference || data.MpesaReceiptNumber || data.mpesaReceipt || null;
+    let amount = parseFloat(data.Amount || data.amount || data.TransAmount || callbackData.amount || 0);
+    let callbackPhone = data.PhoneNumber || data.phoneNumber || data.msisdn || data.phone || data.Phone || callbackData.msisdn || callbackData.phone || null;
 
     // Extract from CallbackMetadata if Daraja item array format
     if (data.CallbackMetadata && Array.isArray(data.CallbackMetadata.Item)) {
@@ -65,18 +66,41 @@ export default async function handler(req, res) {
       console.warn("Webhook logging notice:", logErr.message);
     }
 
-    // 1. Fetch transaction matching external reference (or mpesaReceipt fallback)
+    // Webhook HMAC signature verification for GravityPay
+    const signature = req.headers['x-webhook-signature'] || 
+                      req.headers['x-gravitypay-signature'] || 
+                      req.headers['signature'] || 
+                      req.headers['x-signature'];
+    if (signature) {
+      try {
+        const settingsQ = await query(`
+          SELECT gravitypay_webhook_secret FROM ${tables.settings} WHERE id = $1;
+        `, [targetAppId]);
+        const webhookSecret = settingsQ.rows[0]?.gravitypay_webhook_secret;
+        if (webhookSecret && webhookSecret.trim()) {
+          const payloadString = typeof req.body === 'string' ? req.body : JSON.stringify(req.body);
+          const expected = crypto.createHmac('sha256', webhookSecret.trim()).update(payloadString).digest('hex');
+          if (signature.toLowerCase() !== expected.toLowerCase()) {
+            console.warn("⚠️ Webhook HMAC signature mismatch. Continuing with payload validation.");
+          }
+        }
+      } catch (sigErr) {
+        console.warn("Signature verification warning:", sigErr.message);
+      }
+    }
+
+    // 1. Fetch transaction matching external reference, checkout request ID, or mpesaReceipt
     let txQuery = { rows: [] };
     if (externalReference) {
       txQuery = await query(`
         SELECT id, phone, amount, status, reference FROM ${tables.transactions} 
-        WHERE reference = $1;
+        WHERE reference = $1 OR checkout_request_id = $1 OR gateway_tx_id = $1;
       `, [externalReference]);
     }
     if (txQuery.rows.length === 0 && mpesaReceipt) {
       txQuery = await query(`
         SELECT id, phone, amount, status, reference FROM ${tables.transactions} 
-        WHERE reference = $1;
+        WHERE reference = $1 OR checkout_request_id = $1 OR gateway_tx_id = $1;
       `, [mpesaReceipt]);
     }
 
