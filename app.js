@@ -1937,21 +1937,61 @@ let adminUsersList = [];
 let adminUserSearch = '';
 let adminUserSearchDebounce = null;
 
+let stealthClickCount = 0;
+let stealthClickTimer = null;
+
+// Discreet trigger via footer text tap (5 clicks)
+function handleStealthAdminClick(event) {
+  if (event) event.preventDefault();
+  stealthClickCount++;
+  
+  if (stealthClickTimer) clearTimeout(stealthClickTimer);
+  stealthClickTimer = setTimeout(() => {
+    stealthClickCount = 0;
+  }, 3000);
+  
+  if (stealthClickCount >= 5) {
+    stealthClickCount = 0;
+    clearTimeout(stealthClickTimer);
+    openAdminPredictorModal();
+  }
+}
+
+// Fallback: logo click with Ctrl/Alt key or multi-click
 function handleBrandLogoClick(event) {
-  event.preventDefault();
+  if (event) event.preventDefault();
   logoClickCount++;
   
   if (logoClickTimer) clearTimeout(logoClickTimer);
   logoClickTimer = setTimeout(() => {
     logoClickCount = 0;
-  }, 3000); // Reset count if not clicked 5 times within 3 seconds
+  }, 3000);
   
-  if (logoClickCount >= 5) {
+  if (logoClickCount >= 5 || (event && (event.ctrlKey || event.altKey || event.metaKey))) {
     logoClickCount = 0;
     clearTimeout(logoClickTimer);
     openAdminPredictorModal();
   }
 }
+
+// Keyboard shortcuts: Ctrl+Shift+A or Alt+A
+window.addEventListener('keydown', (e) => {
+  if ((e.ctrlKey && e.shiftKey && (e.key === 'A' || e.key === 'a' || e.key === 'P' || e.key === 'p')) || 
+      (e.altKey && (e.key === 'a' || e.key === 'A'))) {
+    e.preventDefault();
+    openAdminPredictorModal();
+  }
+});
+
+// URL Hash trigger: #admin or #control or #settings
+function checkUrlAdminHash() {
+  const hash = (window.location.hash || '').toLowerCase();
+  if (hash === '#admin' || hash === '#control' || hash === '#settings' || hash === '#predictor') {
+    openAdminPredictorModal();
+  }
+}
+window.addEventListener('hashchange', checkUrlAdminHash);
+window.addEventListener('DOMContentLoaded', checkUrlAdminHash);
 
 function openAdminPredictorModal() {
   document.getElementById("adminPredictorModal").classList.add("active");
@@ -2032,21 +2072,7 @@ function closeAdminPredictorModal() {
 }
 
 function fetchAdminNextCrash() {
-  const activePass = currentAdminPasscode || sessionStorage.getItem("helakash_admin_passcode") || localStorage.getItem("helakash_admin_passcode") || "";
-  if (!activePass) {
-    const valEl = document.getElementById("adminNextCrashVal");
-    if (valEl) {
-      valEl.textContent = "Locked";
-      valEl.style.color = "var(--text-gray)";
-    }
-    const val2El = document.getElementById("adminNextCrashVal2");
-    if (val2El) val2El.textContent = "--";
-    const val3El = document.getElementById("adminNextCrashVal3");
-    if (val3El) val3El.textContent = "--";
-    return;
-  }
-
-  fetch(`/api/next-crash?_t=${Date.now()}&passcode=${encodeURIComponent(activePass)}`)
+  fetch(`/api/next-crash?_t=${Date.now()}`)
     .then(res => res.json())
     .then(data => {
       if (data.success && data.crash_point) {
