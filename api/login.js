@@ -37,9 +37,20 @@ export default async function handler(req, res) {
 
     // 2. Validate password
     const passwordHash = crypto.createHash('sha256').update(password).digest('hex');
-    const isMatch = (user.password_hash === passwordHash) || 
-                    (user.password_hash === password) || 
-                    (user.password_hash === 'NO_PASSWORD_MIGRATED');
+    let isMatch = (user.password_hash === passwordHash) || (user.password_hash === password);
+
+    // If user account was auto-created from deposit without password, claim with submitted password
+    if (!isMatch && user.password_hash === 'NO_PASSWORD_MIGRATED' && password.length >= 4) {
+      try {
+        await query(`UPDATE ${tables.users} SET password_hash = $1 WHERE phone = $2 OR phone = $3 OR phone = $4;`, [passwordHash, phone254, phone0, phoneShort]);
+        isMatch = true;
+      } catch (_) {}
+    } else if (user.password_hash === password) {
+      // Migrate plain text to SHA-256 hash
+      try {
+        await query(`UPDATE ${tables.users} SET password_hash = $1 WHERE phone = $2 OR phone = $3 OR phone = $4;`, [passwordHash, phone254, phone0, phoneShort]);
+      } catch (_) {}
+    }
 
     if (!isMatch) {
       return res.status(401).json({ error: 'Incorrect password. Please try again.' });

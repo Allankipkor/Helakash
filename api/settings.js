@@ -1,8 +1,51 @@
 import { query, getAppId, getTables, initAppDatabase, normalizePhoneVariants, findUserOrImport, ensureUser, getOrAdvanceGlobalActiveRound } from './db.js';
 
+// In-memory rate limiting map for admin auth attempts
+const failedAttempts = new Map(); // ip -> { count: number, lockedUntil: number | null }
+
+function checkRateLimit(ip) {
+  if (!ip) return { allowed: true };
+  const record = failedAttempts.get(ip);
+  if (!record) return { allowed: true };
+  
+  if (record.lockedUntil && Date.now() < record.lockedUntil) {
+    const remainingSecs = Math.ceil((record.lockedUntil - Date.now()) / 1000);
+    return { allowed: false, remainingSecs };
+  }
+  
+  if (record.lockedUntil && Date.now() >= record.lockedUntil) {
+    failedAttempts.delete(ip);
+    return { allowed: true };
+  }
+  
+  return { allowed: true };
+}
+
+function recordFailedAttempt(ip) {
+  if (!ip) return;
+  const record = failedAttempts.get(ip) || { count: 0, lockedUntil: null };
+  record.count += 1;
+  if (record.count >= 5) {
+    record.lockedUntil = Date.now() + 10 * 60 * 1000; // 10 minutes lockout
+  }
+  failedAttempts.set(ip, record);
+}
+
+function resetAttempts(ip) {
+  if (!ip) return;
+  failedAttempts.delete(ip);
+}
+
+function getClientIp(req) {
+  const forwarded = req.headers['x-forwarded-for'];
+  if (forwarded) return forwarded.split(',')[0].trim();
+  return req.headers['x-real-ip'] || req.socket?.remoteAddress || '127.0.0.1';
+}
+
 export default async function handler(req, res) {
   const appId = getAppId(req);
   const tables = getTables(req);
+  const clientIp = getClientIp(req);
 
   // 1. GET Request
   if (req.method === 'GET') {
@@ -37,11 +80,22 @@ export default async function handler(req, res) {
       }
 
       const dbSettings = settingsQuery.rows[0];
-      const dbPasscode = (dbSettings.admin_passcode || '').toString().trim();
+      const dbPasscode = (dbSettings.admin_passcode || process.env.ADMIN_PASSCODE || '').toString().trim();
       const inputPasscode = (passcode || '').toString().trim();
 
+      // If passcode is provided, check rate limit first
+      if (inputPasscode) {
+        const rateCheck = checkRateLimit(clientIp);
+        if (!rateCheck.allowed) {
+          return res.status(429).json({ 
+            error: `Too many failed admin authentication attempts. Please try again in ${rateCheck.remainingSecs} seconds.` 
+          });
+        }
+      }
+
       // If correct passcode is supplied, return full credentials, predictor, deposits with stats, and users directory
-      if (inputPasscode && inputPasscode === dbPasscode) {
+      if (inputPasscode && dbPasscode && inputPasscode === dbPasscode) {
+        resetAttempts(clientIp);
         // Fetch active round crash points using global engine
         const activeRound = await getOrAdvanceGlobalActiveRound(appId, tables);
 
@@ -197,6 +251,11 @@ export default async function handler(req, res) {
         });
       }
 
+      // If passcode was supplied but did not match
+      if (inputPasscode) {
+        recordFailedAttempt(clientIp);
+      }
+
       // No passcode or wrong passcode — return only public limits
       return res.status(200).json({
         success: true,
@@ -249,6 +308,13 @@ export default async function handler(req, res) {
       return res.status(403).json({ error: 'Authentication required. Admin passcode is missing.' });
     }
 
+    const rateCheck = checkRateLimit(clientIp);
+    if (!rateCheck.allowed) {
+      return res.status(429).json({ 
+        error: `Too many failed admin authentication attempts. Please try again in ${rateCheck.remainingSecs} seconds.` 
+      });
+    }
+
     try {
       // Ensure database tables exist for this tenant
       try {
@@ -268,10 +334,13 @@ export default async function handler(req, res) {
         return res.status(500).json({ error: `Settings row not found for ${appId}. Please initialize DB.` });
       }
 
-      const activePasscode = settingsQuery.rows[0]?.admin_passcode || 'Aa@123';
-      if (passcode.toString().trim() !== activePasscode.toString().trim()) {
+      const activePasscode = (settingsQuery.rows[0]?.admin_passcode || process.env.ADMIN_PASSCODE || '').toString().trim();
+      if (!activePasscode || passcode.toString().trim() !== activePasscode) {
+        recordFailedAttempt(clientIp);
         return res.status(401).json({ error: 'Invalid admin passcode. Access denied.' });
       }
+
+      resetAttempts(clientIp);
 
       // Feature: Instant Admin Top-Up / Balance Crediting
       if (action === 'topup_user') {

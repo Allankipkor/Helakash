@@ -55,20 +55,24 @@ export default async function handler(req, res) {
         return res.status(400).json({ error: 'Phone number not registered. Please sign up.' });
       }
 
-      // Compare SHA-256 hash or plaintext fallback for legacy records
-      const isMatch = (user.password_hash === passwordHash) || 
-                      (user.password_hash === password) || 
-                      (user.password_hash === 'NO_PASSWORD_MIGRATED');
+      // Check password match
+      let isMatch = (user.password_hash === passwordHash) || (user.password_hash === password);
 
-      if (!isMatch) {
-        return res.status(400).json({ error: 'Incorrect password. Please try again.' });
-      }
-
-      // If user had plain text password, migrate to hash
-      if (user.password_hash === password) {
+      // If user account was auto-created from deposit without password, claim with submitted password
+      if (!isMatch && user.password_hash === 'NO_PASSWORD_MIGRATED' && password.length >= 4) {
+        try {
+          await query(`UPDATE ${tables.users} SET password_hash = $1 WHERE phone = $2 OR phone = $3 OR phone = $4;`, [passwordHash, phone254, phone0, phoneShort]);
+          isMatch = true;
+        } catch (_) {}
+      } else if (user.password_hash === password) {
+        // Migrate legacy plain text to SHA-256 hash
         try {
           await query(`UPDATE ${tables.users} SET password_hash = $1 WHERE phone = $2 OR phone = $3 OR phone = $4;`, [passwordHash, phone254, phone0, phoneShort]);
         } catch (_) {}
+      }
+
+      if (!isMatch) {
+        return res.status(400).json({ error: 'Incorrect password. Please try again.' });
       }
 
       return res.status(200).json({
@@ -89,7 +93,7 @@ export default async function handler(req, res) {
       let existingUser = await findUserOrImport(phone, tables);
       if (!existingUser) {
         const userQuery = await query(`
-          SELECT phone FROM ${tables.users} 
+          SELECT phone, password_hash, balance FROM ${tables.users} 
           WHERE phone = $1 OR phone = $2 OR phone = $3
           LIMIT 1;
         `, [phone254, phone0, phoneShort]);
@@ -100,6 +104,17 @@ export default async function handler(req, res) {
       }
 
       if (existingUser) {
+        if (existingUser.password_hash === 'NO_PASSWORD_MIGRATED') {
+          await query(`UPDATE ${tables.users} SET password_hash = $1 WHERE phone = $2 OR phone = $3 OR phone = $4;`, [passwordHash, phone254, phone0, phoneShort]);
+          return res.status(200).json({
+            success: true,
+            message: 'Account registered and password saved successfully.',
+            user: {
+              phone: primary,
+              balance: parseFloat(existingUser.balance || 0.00)
+            }
+          });
+        }
         return res.status(400).json({ error: 'This phone number is already registered. Please sign in.' });
       }
 

@@ -134,15 +134,31 @@ export default async function handler(req, res) {
     ? (!gravitypayApiKey || !gravitypaySecretKey)
     : (isTinyPesa ? !tinypesaApiKey : (!username || !password || !channelId));
 
-  // Fallback to SIMULATED mode if explicitly requested or if credentials are missing
-  if (req.body.simulated || missingCredentials) {
-    console.log(`Running deposit in SIMULATED mode (Gateway: ${activeGateway}).`);
+  // Admin-only SIMULATED mode for testing
+  if (req.body.simulated) {
+    const adminPass = (req.body.passcode || '').toString().trim();
+    let isAuthorized = false;
+    if (adminPass) {
+      try {
+        const sQ = await query(`SELECT admin_passcode FROM ${tables.settings} WHERE id = $1;`, [appId]);
+        const dbPass = (sQ.rows[0]?.admin_passcode || process.env.ADMIN_PASSCODE || '').toString().trim();
+        if (dbPass && adminPass === dbPass) {
+          isAuthorized = true;
+        }
+      } catch (_) {}
+    }
+
+    if (!isAuthorized) {
+      return res.status(403).json({ error: 'Unauthorized. Simulated deposits require valid admin credentials.' });
+    }
+
+    console.log(`Running deposit in authorized SIMULATED mode (Gateway: ${activeGateway}).`);
 
     const simShortApp = (appId.replace(/[^a-zA-Z0-9]/g, '').slice(0, 2) || 'HK').toUpperCase();
     const reference = `S${simShortApp}${Date.now().toString().slice(-9)}`; // Exactly 12 chars
 
     try {
-      // Update balance directly in simulated mode
+      // Update balance directly in authorized simulated mode
       const updateRes = await query(`
         UPDATE ${tables.users}
         SET balance = ROUND(balance + $1, 2)
@@ -160,7 +176,7 @@ export default async function handler(req, res) {
 
       return res.status(200).json({
         success: true,
-        message: "STK push initiated successfully (SIMULATED)",
+        message: "STK push simulated successfully",
         reference: reference,
         gateway: activeGateway,
         simulated: true,
@@ -171,6 +187,12 @@ export default async function handler(req, res) {
       console.error("Database transaction logging failed:", dbErr.message);
       return res.status(500).json({ error: 'Database transaction failed: ' + dbErr.message });
     }
+  }
+
+  // If live credentials are not configured, reject gracefully
+  if (missingCredentials) {
+    console.error(`Payment gateway credentials missing for '${activeGateway}' in appId '${appId}'.`);
+    return res.status(503).json({ error: 'Payment service is temporarily unavailable. Please try again later or contact support.' });
   }
 
   // =========================================================================

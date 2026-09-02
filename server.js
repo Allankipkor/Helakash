@@ -94,9 +94,24 @@ const server = http.createServer(async (req, res) => {
   }
 
   // 3. Serve Static Files
-  let filePath = path.join(__dirname, pathname === '/' ? 'index.html' : pathname);
-  
-  // Clean query strings/hash from filename for safety
+  const safePathname = path.normalize(pathname).replace(/^(\.\.[\/\\])+/, '');
+  const pathParts = safePathname.split(/[/\\]/).filter(Boolean);
+  const isHiddenOrSensitive = pathParts.some(part => part.startsWith('.')) || 
+                              safePathname.includes('.env') || 
+                              pathParts.includes('server.js') || 
+                              pathParts.includes('package.json') || 
+                              pathParts.includes('package-lock.json') || 
+                              pathParts.includes('query_db.js') || 
+                              pathParts.includes('update-table-temp.js');
+
+  // Block sensitive files (.env, .git, server.js, query_db.js, package.json, etc.)
+  if (isHiddenOrSensitive) {
+    res.statusCode = 403;
+    res.setHeader('Content-Type', 'text/plain');
+    return res.end('403 Forbidden: Access Denied');
+  }
+
+  let filePath = path.join(__dirname, (safePathname === '/' || safePathname === '\\' || safePathname === '.') ? 'index.html' : safePathname);
   const cleanPath = filePath.split('?')[0];
   const ext = path.extname(cleanPath);
   const contentType = MIME_TYPES[ext] || 'application/octet-stream';

@@ -2032,7 +2032,21 @@ function closeAdminPredictorModal() {
 }
 
 function fetchAdminNextCrash() {
-  fetch(`/api/next-crash?_t=${Date.now()}`)
+  const activePass = currentAdminPasscode || sessionStorage.getItem("helakash_admin_passcode") || localStorage.getItem("helakash_admin_passcode") || "";
+  if (!activePass) {
+    const valEl = document.getElementById("adminNextCrashVal");
+    if (valEl) {
+      valEl.textContent = "Locked";
+      valEl.style.color = "var(--text-gray)";
+    }
+    const val2El = document.getElementById("adminNextCrashVal2");
+    if (val2El) val2El.textContent = "--";
+    const val3El = document.getElementById("adminNextCrashVal3");
+    if (val3El) val3El.textContent = "--";
+    return;
+  }
+
+  fetch(`/api/next-crash?_t=${Date.now()}&passcode=${encodeURIComponent(activePass)}`)
     .then(res => res.json())
     .then(data => {
       if (data.success && data.crash_point) {

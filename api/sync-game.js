@@ -26,35 +26,6 @@ export default async function handler(req, res) {
     let currentBalance = parseFloat(user.balance || 0.00);
     const userPhone = user.phone || primary;
 
-    // Handle Deposit Sync (e.g. from simulated deposits or client recovery)
-    if (type === 'Deposit' && (amount || betAmount)) {
-      const depositAmt = parseFloat(amount || betAmount);
-      if (!isNaN(depositAmt) && depositAmt > 0) {
-        const updateRes = await query(`
-          UPDATE ${tables.users}
-          SET balance = ROUND(balance + $1, 2)
-          WHERE phone = $2 OR phone = $3 OR phone = $4
-          RETURNING balance, phone;
-        `, [depositAmt, phone254, phone0, phoneShort]);
-
-        const newBal = updateRes.rows.length > 0 ? parseFloat(updateRes.rows[0].balance) : currentBalance + depositAmt;
-        const ref = `DEP-${appId.toUpperCase()}-${Date.now()}`;
-
-        await query(`
-          INSERT INTO ${tables.transactions} (phone, type, amount, status, reference)
-          VALUES ($1, 'Deposit', $2, 'Success', $3);
-        `, [userPhone, depositAmt, ref]);
-
-        return res.status(200).json({
-          success: true,
-          action: 'deposit_synced',
-          amount: depositAmt,
-          newBalance: newBal,
-          balance: newBal
-        });
-      }
-    }
-
     // Handle Bet Placement (Deduct balance)
     const isBetPlacement = (betAmount !== undefined || amount !== undefined) && 
                            !cashoutMultiplier && !multiplier && !crashed && 
@@ -129,7 +100,7 @@ export default async function handler(req, res) {
         winAmt = parseFloat(parseFloat(amount).toFixed(2));
       }
 
-      if (winAmt <= 0) {
+      if (winAmt <= 0 || isNaN(winAmt) || !isFinite(winAmt) || winAmt > 500000) {
         return res.status(400).json({ error: 'Invalid win amount calculation.' });
       }
 

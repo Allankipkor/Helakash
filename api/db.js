@@ -325,7 +325,7 @@ export async function initAppDatabase(req) {
       gravitypay_secret_key VARCHAR(255),
       gravitypay_webhook_secret VARCHAR(255),
       aviator_speed VARCHAR(50) DEFAULT 'normal',
-      admin_passcode VARCHAR(255) DEFAULT 'Aa@123'
+      admin_passcode VARCHAR(255)
     );
   `);
 
@@ -342,12 +342,13 @@ export async function initAppDatabase(req) {
     await query(`ALTER TABLE ${tables.transactions} ADD COLUMN IF NOT EXISTS gateway_tx_id VARCHAR(255);`);
   } catch (_) {}
 
-  // Seed default settings row for this APP_ID
+  // Seed default settings row for this APP_ID if not present
+  const initialPass = process.env.ADMIN_PASSCODE || null;
   await query(`
     INSERT INTO ${tables.settings} (id, min_deposit, min_withdrawal, min_stake, active_gateway, aviator_speed, admin_passcode)
-    VALUES ($1, 300.00, 500.00, 400.00, 'gravitypay', 'normal', 'Aa@123')
+    VALUES ($1, 300.00, 500.00, 400.00, 'gravitypay', 'normal', $2)
     ON CONFLICT (id) DO NOTHING;
-  `, [appId]);
+  `, [appId, initialPass]);
 
   return {
     success: true,

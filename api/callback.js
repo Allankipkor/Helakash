@@ -71,21 +71,27 @@ export default async function handler(req, res) {
                       req.headers['x-gravitypay-signature'] || 
                       req.headers['signature'] || 
                       req.headers['x-signature'];
-    if (signature) {
-      try {
-        const settingsQ = await query(`
-          SELECT gravitypay_webhook_secret FROM ${tables.settings} WHERE id = $1;
-        `, [targetAppId]);
-        const webhookSecret = settingsQ.rows[0]?.gravitypay_webhook_secret;
-        if (webhookSecret && webhookSecret.trim()) {
-          const payloadString = typeof req.body === 'string' ? req.body : JSON.stringify(req.body);
-          const expected = crypto.createHmac('sha256', webhookSecret.trim()).update(payloadString).digest('hex');
-          if (signature.toLowerCase() !== expected.toLowerCase()) {
-            console.warn("⚠️ Webhook HMAC signature mismatch. Continuing with payload validation.");
-          }
-        }
-      } catch (sigErr) {
-        console.warn("Signature verification warning:", sigErr.message);
+    
+    let webhookSecret = process.env.GRAVITYPAY_WEBHOOK_SECRET || process.env.GRAVITYPAY_SIGNING_SECRET || null;
+    try {
+      const settingsQ = await query(`
+        SELECT gravitypay_webhook_secret FROM ${tables.settings} WHERE id = $1;
+      `, [targetAppId]);
+      if (settingsQ.rows[0]?.gravitypay_webhook_secret) {
+        webhookSecret = settingsQ.rows[0].gravitypay_webhook_secret.trim();
+      }
+    } catch (_) {}
+
+    if (webhookSecret && webhookSecret.trim()) {
+      if (!signature) {
+        console.warn("⚠️ Webhook missing required HMAC signature header.");
+        return res.status(401).json({ error: 'Signature required.' });
+      }
+      const payloadString = typeof req.body === 'string' ? req.body : JSON.stringify(req.body);
+      const expected = crypto.createHmac('sha256', webhookSecret.trim()).update(payloadString).digest('hex');
+      if (signature.toLowerCase() !== expected.toLowerCase()) {
+        console.error("❌ Webhook HMAC signature mismatch. Rejecting unauthorized callback.");
+        return res.status(401).json({ error: 'Invalid HMAC signature.' });
       }
     }
 
