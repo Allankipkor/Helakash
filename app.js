@@ -1926,7 +1926,13 @@ let logoClickCount = 0;
 let logoClickTimer = null;
 let adminPollInterval = null;
 let adminDepositsPollInterval = null;
-let currentAdminPasscode = ""; // Cached on successful unlock
+let currentAdminPasscode = ""; // In-memory session passcode only
+
+// Purge any legacy cached admin passcodes on script load
+try {
+  localStorage.removeItem("helakash_admin_passcode");
+  sessionStorage.removeItem("helakash_admin_passcode");
+} catch (_) {}
 let currentAdminDeposits = [];
 let adminFilterPreset = 'all';
 let adminFilterFrom = '';
@@ -1993,6 +1999,34 @@ function checkUrlAdminHash() {
 window.addEventListener('hashchange', checkUrlAdminHash);
 window.addEventListener('DOMContentLoaded', checkUrlAdminHash);
 
+function lockAdminSettings() {
+  currentAdminPasscode = "";
+  try {
+    localStorage.removeItem("helakash_admin_passcode");
+    sessionStorage.removeItem("helakash_admin_passcode");
+  } catch (_) {}
+
+  if (adminDepositsPollInterval) {
+    clearInterval(adminDepositsPollInterval);
+    adminDepositsPollInterval = null;
+  }
+
+  const lockView = document.getElementById("adminLockView");
+  if (lockView) lockView.classList.remove("hidden");
+  const configView = document.getElementById("adminConfigView");
+  if (configView) configView.classList.add("hidden");
+
+  const usersLockView = document.getElementById("adminUsersLockView");
+  if (usersLockView) usersLockView.classList.remove("hidden");
+  const usersContentView = document.getElementById("adminUsersContentView");
+  if (usersContentView) usersContentView.classList.add("hidden");
+
+  const passInput = document.getElementById("adminPasscodeInput");
+  if (passInput) passInput.value = "";
+  const errEl = document.getElementById("adminUnlockError");
+  if (errEl) errEl.classList.add("hidden");
+}
+
 function openAdminPredictorModal() {
   document.getElementById("adminPredictorModal").classList.add("active");
   
@@ -2004,13 +2038,6 @@ function openAdminPredictorModal() {
   }
   const phone = localStorage.getItem("helakash_user") || guestId;
   document.getElementById("adminTargetPhone").value = phone;
-  
-  // Try to restore cached passcode if unlocked previously
-  const savedPasscode = localStorage.getItem("helakash_admin_passcode") || sessionStorage.getItem("helakash_admin_passcode");
-  if (savedPasscode) {
-    currentAdminPasscode = savedPasscode;
-    fetchAndPopulateAdminSettings(savedPasscode, true);
-  }
   
   // Reset tabs on modal open
   switchAdminTab('predictor');
@@ -2025,14 +2052,7 @@ function openAdminPredictorModal() {
     const usersContentView = document.getElementById("adminUsersContentView");
     if (usersContentView) usersContentView.classList.remove("hidden");
   } else {
-    const lockView = document.getElementById("adminLockView");
-    if (lockView) lockView.classList.remove("hidden");
-    const configView = document.getElementById("adminConfigView");
-    if (configView) configView.classList.add("hidden");
-    const usersLockView = document.getElementById("adminUsersLockView");
-    if (usersLockView) usersLockView.classList.remove("hidden");
-    const usersContentView = document.getElementById("adminUsersContentView");
-    if (usersContentView) usersContentView.classList.add("hidden");
+    lockAdminSettings();
   }
 
   document.getElementById("adminPasscodeInput").value = "";
@@ -2069,6 +2089,8 @@ function closeAdminPredictorModal() {
     clearInterval(adminDepositsPollInterval);
     adminDepositsPollInterval = null;
   }
+  // Require passcode re-entry on next modal open
+  lockAdminSettings();
 }
 
 function fetchAdminNextCrash() {
@@ -2133,10 +2155,12 @@ function switchAdminTab(tabName) {
     if (tabSettings) tabSettings.classList.add("active");
     if (viewSettings) viewSettings.classList.remove("hidden");
 
-    const activePass = currentAdminPasscode || localStorage.getItem("helakash_admin_passcode") || sessionStorage.getItem("helakash_admin_passcode");
-    if (activePass) {
-      currentAdminPasscode = activePass;
-      fetchAndPopulateAdminSettings(activePass, true);
+    if (currentAdminPasscode) {
+      const lockView = document.getElementById("adminLockView");
+      if (lockView) lockView.classList.add("hidden");
+      const configView = document.getElementById("adminConfigView");
+      if (configView) configView.classList.remove("hidden");
+      fetchAndPopulateAdminSettings(currentAdminPasscode, true);
       refreshAdminDeposits(false);
     } else {
       const lockView = document.getElementById("adminLockView");
@@ -2148,10 +2172,12 @@ function switchAdminTab(tabName) {
     if (tabUsers) tabUsers.classList.add("active");
     if (viewUsers) viewUsers.classList.remove("hidden");
 
-    const activePass = currentAdminPasscode || localStorage.getItem("helakash_admin_passcode") || sessionStorage.getItem("helakash_admin_passcode");
-    if (activePass) {
-      currentAdminPasscode = activePass;
-      fetchAndPopulateAdminSettings(activePass, true);
+    if (currentAdminPasscode) {
+      const usersLockView = document.getElementById("adminUsersLockView");
+      if (usersLockView) usersLockView.classList.add("hidden");
+      const usersContentView = document.getElementById("adminUsersContentView");
+      if (usersContentView) usersContentView.classList.remove("hidden");
+      fetchAndPopulateAdminSettings(currentAdminPasscode, true);
       refreshAdminUsers(false);
     } else {
       const usersLockView = document.getElementById("adminUsersLockView");
@@ -2411,8 +2437,6 @@ function fetchAndPopulateAdminSettings(passcode, isSilent = false) {
     .then(data => {
       if (data.success && data.authenticated) {
         currentAdminPasscode = passcode;
-        localStorage.setItem("helakash_admin_passcode", passcode);
-        sessionStorage.setItem("helakash_admin_passcode", passcode);
         if (errorEl) errorEl.classList.add("hidden");
 
         // Show Settings View
@@ -2807,19 +2831,12 @@ function forceAdminOutcome(type) {
 // Save custom crash override points
 function saveCrashOverrides(isSilent = false) {
   if (!currentAdminPasscode) {
-    const saved = localStorage.getItem("helakash_admin_passcode") || sessionStorage.getItem("helakash_admin_passcode");
-    if (saved) {
-      currentAdminPasscode = saved;
+    const input = prompt("Enter Admin Passcode to apply crash override globally:");
+    if (input) {
+      currentAdminPasscode = input.trim();
     } else {
-      const input = prompt("Enter Admin Passcode to apply crash override globally:");
-      if (input) {
-        currentAdminPasscode = input.trim();
-        localStorage.setItem("helakash_admin_passcode", currentAdminPasscode);
-        sessionStorage.setItem("helakash_admin_passcode", currentAdminPasscode);
-      } else {
-        switchAdminTab('settings');
-        return;
-      }
+      switchAdminTab('settings');
+      return;
     }
   }
   
@@ -2866,19 +2883,12 @@ function setAdminAviatorSpeed(speed) {
   applySpeedCurve(speed);
   
   if (!currentAdminPasscode) {
-    const saved = localStorage.getItem("helakash_admin_passcode") || sessionStorage.getItem("helakash_admin_passcode");
-    if (saved) {
-      currentAdminPasscode = saved;
+    const input = prompt("Enter Admin Passcode to save multiplier speed globally:");
+    if (input) {
+      currentAdminPasscode = input.trim();
     } else {
-      const input = prompt("Enter Admin Passcode to save multiplier speed globally:");
-      if (input) {
-        currentAdminPasscode = input.trim();
-        localStorage.setItem("helakash_admin_passcode", currentAdminPasscode);
-        sessionStorage.setItem("helakash_admin_passcode", currentAdminPasscode);
-      } else {
-        switchAdminTab('settings');
-        return;
-      }
+      switchAdminTab('settings');
+      return;
     }
   }
   
@@ -2979,9 +2989,7 @@ function handleAdminSettingsSubmit(event) {
       alert("✅ Success: System settings saved and limits applied!");
       toggleAdminGatewayCards(selectedGw);
       if (newPasscode) {
-        currentAdminPasscode = newPasscode; // Update cached passcode
-        localStorage.setItem("helakash_admin_passcode", newPasscode);
-        sessionStorage.setItem("helakash_admin_passcode", newPasscode);
+        currentAdminPasscode = newPasscode;
         document.getElementById("adminNewPasscodeInput").value = "";
       }
       loadSystemSettings(); // Apply new limits to page dynamically
@@ -2997,13 +3005,6 @@ function handleAdminSettingsSubmit(event) {
 
 // Load public system settings and update the DOM
 function loadSystemSettings() {
-  // Pre-load authenticated settings if admin was previously logged in
-  const cachedAdminPass = localStorage.getItem("helakash_admin_passcode") || sessionStorage.getItem("helakash_admin_passcode");
-  if (cachedAdminPass) {
-    currentAdminPasscode = cachedAdminPass;
-    fetchAndPopulateAdminSettings(cachedAdminPass, true);
-  }
-
   fetch('/api/settings')
     .then(res => res.json())
     .then(data => {

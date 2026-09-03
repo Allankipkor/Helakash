@@ -579,10 +579,16 @@
   <div class="modal-overlay" id="adminPredictorModal">
     <div class="modal-content"
       style="max-width: 580px; width: 95%; background: #141725; border: 1px solid rgba(255, 255, 255, 0.1); border-radius: 16px; padding: 24px; box-shadow: 0 20px 40px rgba(0,0,0,0.6); max-height: 88vh; overflow-y: auto;">
-      <h3 class="modal-title"
-        style="color: var(--primary); font-size: 20px; font-weight: 800; display: flex; align-items: center; justify-content: center; gap: 8px; margin-bottom: 8px;">
-        ✈️ PesaKash Admin Control Center</h3>
-      <p class="stk-desc" style="text-align: center; margin-bottom: 20px; font-size: 13px; color: var(--text-gray);">
+      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
+        <h3 class="modal-title"
+          style="color: var(--primary); font-size: 19px; font-weight: 800; display: flex; align-items: center; gap: 8px; margin: 0;">
+          ✈️ PesaKash Admin Control Center</h3>
+        <button type="button" onclick="lockAdminSettings()" title="Lock Admin Settings and Users"
+          style="background: rgba(239, 68, 68, 0.12); border: 1px solid rgba(239, 68, 68, 0.3); color: #f87171; border-radius: 6px; padding: 4px 10px; font-size: 11px; font-weight: 700; cursor: pointer; display: flex; align-items: center; gap: 4px; transition: all 0.2s;">
+          🔒 Lock Session
+        </button>
+      </div>
+      <p class="stk-desc" style="margin-bottom: 18px; font-size: 12px; color: var(--text-gray);">
         Configure transaction limits, payment details, live balances, and override outcomes.</p>
 
       <!-- Admin Tabs Navigation -->
